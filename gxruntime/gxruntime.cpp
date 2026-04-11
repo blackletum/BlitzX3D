@@ -4,6 +4,7 @@
 #include <shellapi.h>
 
 #include "../gxruntime/gxutf8.h"
+#include "../gxruntime/gxaudio_stream.h"
 
 #include "../freeimage/freeimage.h"
 
@@ -361,13 +362,44 @@ void gxRuntime::paint() {
 //////////
 
 void gxRuntime::flip(bool vwait) {
-	MSG msg;
-	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-		if (!run_flag) {
-			return;
+MSG msg;
+while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+	TranslateMessage(&msg);
+	DispatchMessage(&msg);
+	if (!run_flag) {
+		return;
+	}
+}
+
+gxAudio_UpdateStreams();
+
+gxCanvas* b = graphics->getBackCanvas();
+gxCanvas* f = graphics->getFrontCanvas();
+int n;
+switch(gfx_mode) {
+	case GMODE_SCALED:
+	case GMODE_FIXED:
+		if(vwait) graphics->vwait();
+		f->setModify(b->getModify());
+		if(f->getModify() != mod_cnt) {
+			mod_cnt = f->getModify();
+			paint();
 		}
+		break;
+	case GMODE_EXCLUSIVE:
+		if(vwait) {
+			BOOL vb;
+			while(graphics->dirDraw->GetVerticalBlankStatus(&vb) >= 0 && vb) {}
+			n = f->getSurface()->Flip(0, DDFLIP_WAIT);
+		}
+		else {
+			n = f->getSurface()->Flip(0, DDFLIP_NOVSYNC | DDFLIP_WAIT);
+		}
+		if(n >= 0) return;
+		debugLog(("Flip Failed! Return code:" + itoa(n & 0x7fff)).c_str());
+		break;
+}
+
 	}
 
 	if (!graphics || !d3dDevice) return;

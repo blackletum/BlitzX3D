@@ -143,6 +143,7 @@
   <ItemGroup>
     <ClCompile Include="ddutil.cpp" />
     <ClCompile Include="gxeffect.cpp" />
+    <ClCompile Include="gxaudio_stream.cpp" />
     <ClCompile Include="gxfont.cpp" />
     <ClCompile Include="gxaudio.cpp" />
     <ClCompile Include="gxcanvas.cpp" />
@@ -177,6 +178,7 @@
     <ClInclude Include="asmcoder.h" />
     <ClInclude Include="ddutil.h" />
     <ClInclude Include="gxeffect.h" />
+    <ClInclude Include="gxaudio_stream.h" />
     <ClInclude Include="gxfont.h" />
     <ClInclude Include="gxaudio.h" />
     <ClInclude Include="gxcanvas.h" />
