@@ -32,7 +32,8 @@ static World* world;
 
 static std::unordered_set<Brush*> brush_set;
 static std::unordered_set<Texture*> texture_set;
-static std::unordered_set<Entity*> entity_set;
+static std::unordered_map<Entity*, uint32_t> entity_set;
+static std::unordered_map<Entity*, uint32_t> entity_generation;
 
 static Listener* listener;
 
@@ -182,7 +183,7 @@ static void collapseMesh(MeshModel* mesh, Entity* e) {
 }
 
 static void insert(Entity* e) {
-	/*if (debug)*/ entity_set.insert(e);
+	/*if (debug)*/ uint32_t gen = entity_generation[e];
 	e->setVisible(true);
 	e->setEnabled(true);
 	e->getObject()->reset();
@@ -203,6 +204,7 @@ static void erase(Entity* e) {
 	}
 	if (e->getListener()) listener = 0;
 	/*if (debug)*/ entity_set.erase(e);
+	entity_generation[e]++;
 }
 
 static Entity* findChild(Entity* e, const std::string& t) {
@@ -1435,7 +1437,11 @@ void  bbFreeEntity(Entity* e) {
 
 int bbEntityExist(Entity* e) {
 	if (!e) return 0;
-	return entity_set.count(e) ? 1 : 0;
+	auto it = entity_set.find(e);
+	if (it == entity_set.end()) return 0;
+	auto gen_it = entity_generation.find(e);
+	if (gen_it == entity_generation.end()) return 0;
+	return it->second == gen_it->second ? 1 : 0;
 }
 
 void  bbHideEntity(Entity* e) {

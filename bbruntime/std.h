@@ -16,6 +16,7 @@
 #include <fstream>
 #include <unordered_set>
 #include <cmath>
+#include <unordered_map>
 
 #define ErrorLog(function, log) if (debug) { RTEX(log) } else { errorfunc = function; errorlog = log; }
 
