@@ -57,13 +57,13 @@ static bool clip(const RECT& viewport, RECT* d, RECT* s) {
 }
 
 class FillRectGuard {
-    IDirect3DDevice8* dev;
-    IDirect3DSurface8* oldRT;
-    IDirect3DSurface8* oldDS;
+    IDirect3DDevice9Ex* dev;
+    IDirect3DSurface9* oldRT;
+    IDirect3DSurface9* oldDS;
     bool active;
 
 public:
-    FillRectGuard(IDirect3DDevice8* d) : dev(d), oldRT(nullptr), oldDS(nullptr), active(false) {
+    FillRectGuard(IDirect3DDevice9Ex* d) : dev(d), oldRT(nullptr), oldDS(nullptr), active(false) {
         if (!dev) return;
         dev->GetRenderTarget(&oldRT);
         dev->GetDepthStencilSurface(&oldDS);
@@ -136,7 +136,7 @@ struct QuadVertex {
 };
 static const DWORD QUAD_FVF = D3DFVF_XYZRHW | D3DFVF_TEX1;
 
-gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface8* s, int f) :
+gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     graphics(g), plain_surf(s), tex(nullptr), cube_tex(nullptr), surf(s), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
@@ -245,7 +245,7 @@ void gxCanvas::backup() {
     D3DSURFACE_DESC desc;
     if (FAILED(surf->GetDesc(&desc))) return;
 
-    IDirect3DDevice8* dev = graphics->dir3dDev;
+    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     if (!dev) return;
 
     if (t_surf) { t_surf->Release(); t_surf = nullptr; }
@@ -260,7 +260,7 @@ void gxCanvas::restore() {
     D3DSURFACE_DESC tdesc;
     t_surf->GetDesc(&tdesc);
 
-    IDirect3DDevice8* dev = graphics->dir3dDev;
+    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     if (!dev) return;
 
     tex = nullptr;
@@ -274,7 +274,7 @@ void gxCanvas::restore() {
     if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, 0,
         tdesc.Format, D3DPOOL_MANAGED, &newTex))) return;
 
-    IDirect3DSurface8* newSurf = nullptr;
+    IDirect3DSurface9* newSurf = nullptr;
     newTex->GetSurfaceLevel(0, &newSurf);
     dev->CopyRects(t_surf, nullptr, 0, newSurf, nullptr);
 
@@ -282,7 +282,7 @@ void gxCanvas::restore() {
     surf = newSurf;
 }
 
-IDirect3DSurface8* gxCanvas::getSurface() const {
+IDirect3DSurface9* gxCanvas::getSurface() const {
     return surf;
 }
 
@@ -344,7 +344,7 @@ bool gxCanvas::attachZBuffer() {
     if (z_surf) return true;
     D3DSURFACE_DESC desc;
     surf->GetDesc(&desc);
-    IDirect3DDevice8* dev = graphics->dir3dDev;
+    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     HRESULT hr = dev->CreateDepthStencilSurface(desc.Width, desc.Height, graphics->zbuffFmt, D3DMULTISAMPLE_NONE, &z_surf);
     if (FAILED(hr) || !z_surf) {
         char buf[256];
@@ -503,7 +503,7 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
     damage(dest);
 }
 
-static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice8* dev, gxCanvas* src, unsigned maskRGB) {
+static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* src, unsigned maskRGB) {
     if (src->blit_tex && src->blit_tex_mod_cnt == src->mod_cnt && src->blit_tex_mask == maskRGB)
         return src->blit_tex;
 
@@ -518,7 +518,7 @@ static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice8* dev, gxCanvas* src
     if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex)))
         return nullptr;
 
-    IDirect3DSurface8* texSurf = nullptr;
+    IDirect3DSurface9* texSurf = nullptr;
     if (FAILED(newTex->GetSurfaceLevel(0, &texSurf))) { newTex->Release(); return nullptr; }
 
     D3DLOCKED_RECT srcLR, dstLR;
@@ -563,7 +563,7 @@ static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice8* dev, gxCanvas* src
     return newTex;
 }
 
-static void drawBlitQuad(IDirect3DDevice8* dev,
+static void drawBlitQuad(IDirect3DDevice9Ex* dev,
     IDirect3DTexture8* tex,
     const RECT& dst,
     const RECT& srcRect,
@@ -591,7 +591,7 @@ static void drawBlitQuad(IDirect3DDevice8* dev,
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, verts, sizeof(QuadVertex));
 }
 
-static void setupBlitRenderState(IDirect3DDevice8* dev, bool solid) {
+static void setupBlitRenderState(IDirect3DDevice9Ex* dev, bool solid) {
     dev->SetRenderState(D3DRS_ZENABLE, FALSE);
     dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
     dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
@@ -611,17 +611,17 @@ static void setupBlitRenderState(IDirect3DDevice8* dev, bool solid) {
 }
 
 struct SavedBlitState {
-    IDirect3DSurface8* oldRT;
-    IDirect3DSurface8* oldDS;
+    IDirect3DSurface9* oldRT;
+    IDirect3DSurface9* oldDS;
     IDirect3DBaseTexture8* oldTex;
-    D3DVIEWPORT8 oldVP;
+    D3DVIEWPORT9 oldVP;
     DWORD oldZ, oldAlphaTest, oldAlphaFunc, oldAlphaRef, oldAlphaBlend;
     DWORD oldSrcBlend, oldDestBlend;
     DWORD oldLighting, oldTextureFactor;
     DWORD oldCOp, oldCArg1, oldCArg2, oldAOp, oldAArg1, oldMag, oldMin;
 };
 
-static void saveBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
+static void saveBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
     dev->GetRenderTarget(&s.oldRT);
     dev->GetDepthStencilSurface(&s.oldDS);
     dev->GetTexture(0, &s.oldTex);
@@ -644,7 +644,7 @@ static void saveBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
     dev->GetTextureStageState(0, D3DTSS_MINFILTER, &s.oldMin);
 }
 
-static void restoreBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
+static void restoreBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
     dev->SetRenderTarget(s.oldRT, s.oldDS);
     if (s.oldRT) s.oldRT->Release();
     if (s.oldDS) s.oldDS->Release();
@@ -669,7 +669,7 @@ static void restoreBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
     if (s.oldTex) s.oldTex->Release();
 }
 
-static bool isRenderTarget(IDirect3DSurface8* s) {
+static bool isRenderTarget(IDirect3DSurface9* s) {
     D3DSURFACE_DESC desc;
     return SUCCEEDED(s->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET);
 }
@@ -728,7 +728,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
         return;
     }
 
-    IDirect3DDevice8* dev = graphics->dir3dDev;
+    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     if (!dev) return;
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
@@ -740,7 +740,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
 
     dev->SetRenderTarget(surf, nullptr);
 
-    D3DVIEWPORT8 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
+    D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
     setupBlitRenderState(dev, solid);
@@ -782,7 +782,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
         return;
     }
 
-    IDirect3DDevice8* dev = graphics->dir3dDev;
+    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     if (!dev) return;
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
@@ -794,7 +794,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     dev->SetRenderTarget(surf, nullptr);
 
-    D3DVIEWPORT8 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
+    D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
     setupBlitRenderState(dev, solid);
@@ -825,7 +825,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
         return;
     }
 
-    IDirect3DDevice8* dev = graphics->dir3dDev;
+    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     if (!dev) return;
 
     IDirect3DBaseTexture8* tex = src->getTexture();
@@ -838,7 +838,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
 
     dev->SetRenderTarget(surf, nullptr);
 
-    D3DVIEWPORT8 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
+    D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
     dev->SetRenderState(D3DRS_LIGHTING, FALSE);

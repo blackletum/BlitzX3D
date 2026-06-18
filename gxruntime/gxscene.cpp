@@ -54,7 +54,7 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	caps_level = 100;
 	max_lights = 8;
 
-	D3DCAPS8 caps8;
+	D3DCAPS9 caps8;
 	if (SUCCEEDED(dir3dDev->GetDeviceCaps(&caps8))) {
 		DWORD rasterCaps = caps8.RasterCaps;
 

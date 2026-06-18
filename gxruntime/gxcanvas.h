@@ -9,7 +9,7 @@ class gxGraphics;
 
 class gxCanvas {
 public:
-	gxCanvas(gxGraphics* g, IDirect3DSurface8* surf, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DSurface9* surf, int flags);
 	gxCanvas(gxGraphics* g, IDirect3DTexture8* tex, int flags);
 	gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* cube_tex, int flags);
 	~gxCanvas();
@@ -19,7 +19,7 @@ public:
 	void backup();
 	void restore();
 
-	IDirect3DSurface8* getSurface()  const;
+	IDirect3DSurface9* getSurface()  const;
 	IDirect3DBaseTexture8* getTexture() const;
 
 	mutable int mod_cnt;
@@ -44,19 +44,19 @@ public:
 	bool clip(RECT* d, RECT* s) const;
 	void damage(const RECT& r)  const;
 
-	IDirect3DSurface8* surf;             // the "active" surf
-	IDirect3DSurface8* z_surf;           // depth/stencil surf
+	IDirect3DSurface9* surf;             // the "active" surf
+	IDirect3DSurface9* z_surf;           // depth/stencil surf
 
 private:
 	int   flags, cube_mode;
 
-	IDirect3DSurface8* plain_surf;   // non text offscreen surf
+	IDirect3DSurface9* plain_surf;   // non text offscreen surf
 	IDirect3DTexture8* tex;
 	IDirect3DCubeTexture8* cube_tex;
 
-	IDirect3DSurface8* cube_surfs[6];
+	IDirect3DSurface9* cube_surfs[6];
 
-	mutable IDirect3DSurface8* t_surf;
+	mutable IDirect3DSurface9* t_surf;
 
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
 	mutable unsigned char* locked_surf;

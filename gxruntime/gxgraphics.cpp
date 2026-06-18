@@ -6,7 +6,7 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice8* dev, IDirect3DSurface8* front, IDirect3DSurface8* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -43,7 +43,7 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice8* dev, IDirect3DSurface8* 
 	front_canvas->setFont(def_font);
 	back_canvas->setFont(def_font);
 
-	D3DCAPS8 caps;
+	D3DCAPS9 caps;
 	if (dir3dDev && SUCCEEDED(dir3dDev->GetDeviceCaps(&caps))) {
 		// simple for now, we should probably enumerate!!
 		zbuffFmt = D3DFMT_D16;
@@ -115,7 +115,7 @@ bool gxGraphics::restore() {
 		hr = dir3dDev->Reset(&present_params);
 		if (FAILED(hr)) return false;
 
-		IDirect3DSurface8* newBack = nullptr;
+		IDirect3DSurface9* newBack = nullptr;
 		hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
 		if (FAILED(hr) || !newBack) return false;
 
@@ -216,7 +216,7 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 		return false;
 	}
 
-	IDirect3DSurface8* newBack = nullptr;
+	IDirect3DSurface9* newBack = nullptr;
 	hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
 	if (FAILED(hr) || !newBack) {
 		runtime->debugLog("GetBackBuffer failed");
@@ -311,7 +311,7 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 		c->cls();
 		return c;
 	}
-	IDirect3DSurface8* surf = ddUtil::createDisplaySurface(w, h, this);
+	IDirect3DSurface9* surf = ddUtil::createDisplaySurface(w, h, this);
 	if (!surf) return nullptr;
 	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
@@ -327,7 +327,7 @@ gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 		canvas_set.insert(c);
 		return c;
 	}
-	IDirect3DSurface8* surf = ddUtil::loadDisplaySurface(f, flags, this);
+	IDirect3DSurface9* surf = ddUtil::loadDisplaySurface(f, flags, this);
 	if (!surf) return nullptr;
 	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);

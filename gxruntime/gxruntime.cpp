@@ -22,7 +22,7 @@ struct gxRuntime::GfxMode {
 };
 
 struct gxRuntime::GfxDriver {
-	D3DADAPTER_IDENTIFIER8 identifier;
+	D3DADAPTER_IDENTIFIER9 identifier;
 	std::vector<GfxMode*> modes;
 	UINT adapter;
 };
@@ -119,9 +119,10 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 
 	FreeImage_Initialise(true);
 
-	d3d = Direct3DCreate8(D3D_SDK_VERSION);
-	if (!d3d) {
-		debugLog("Direct3D8 not available");
+	HRESULT hr = Direct3DCreate9Ex(D3D_SDK_VERSION, &d3d);
+	if (FAILED(hr))
+	{
+		d3d = nullptr;
 	}
 
 	enumGfx();
@@ -270,7 +271,7 @@ void gxRuntime::paint() {
 	case GMODE_FIXED: {
 		if (!graphics) break;
 		gxCanvas* f = graphics->getFrontCanvas();
-		IDirect3DSurface8* canvasSurf = f->getSurface();
+		IDirect3DSurface9* canvasSurf = f->getSurface();
 
 		RECT src, dest;
 		GetClientRect(hwnd, &dest);
@@ -278,9 +279,7 @@ void gxRuntime::paint() {
 		src.right = (gfx_mode == GMODE_SCALED) ? graphics->getWidth() : (dest.right - dest.left);
 		src.bottom = (gfx_mode == GMODE_SCALED) ? graphics->getHeight() : (dest.bottom - dest.top);
 
-		// D3D8 has no StretchRect..?
-		POINT pt = { dest.left, dest.top };
-		d3dDevice->CopyRects(canvasSurf, &src, 1, backBuffer, &pt);
+		d3dDevice->StretchRect(canvasSurf, &src, backBuffer, &dest, (gfx_mode == GMODE_SCALED) ? D3DTEXF_LINEAR : D3DTEXF_POINT);
 		d3dDevice->Present(NULL, NULL, NULL, NULL);
 		break;
 	}
@@ -827,9 +826,9 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 
 	d3dpp.BackBufferFormat = (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
 
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
+	if (FAILED(this->d3d->CreateDeviceEx(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, NULL, &d3dDevice))) return 0;
 
-	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release(); d3dDevice = 0;
 		return 0;
 	}
@@ -875,11 +874,20 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.EnableAutoDepthStencil = FALSE;
 	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) {
+	D3DDISPLAYMODEEX displayModeEx;
+	ZeroMemory(&displayModeEx, sizeof(displayModeEx));
+	displayModeEx.Size = sizeof(D3DDISPLAYMODEEX);
+	displayModeEx.Width = w;
+	displayModeEx.Height = h;
+	displayModeEx.RefreshRate = 0;
+	displayModeEx.Format = format;
+	displayModeEx.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+
+	if (FAILED(this->d3d->CreateDeviceEx(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &displayModeEx, &d3dDevice))) {
 		return 0;
 	}
 
-	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release();
 		d3dDevice = 0;
 		return 0;
@@ -1024,7 +1032,7 @@ bool gxRuntime::graphicsLost() {
 	if (hr == D3DERR_DEVICELOST) return true;
 	if (hr == D3DERR_DEVICENOTRESET) {
 		d3dDevice->Reset(&d3dpp);
-		d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+		d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
 	}
 	return false;
 }
@@ -1066,26 +1074,36 @@ void gxRuntime::enumGfx() {
 	if (!d3d) return;
 	UINT adapterCount = d3d->GetAdapterCount();
 	for (UINT i = 0; i < adapterCount; ++i) {
-		D3DADAPTER_IDENTIFIER8 id;
-		if (SUCCEEDED(d3d->GetAdapterIdentifier(i, 0, &id))) {
-			GfxDriver* d = new GfxDriver;
-			d->adapter = i;
-			d->identifier = id;
-			UINT modeCount = d3d->GetAdapterModeCount(i);
+
+		D3DADAPTER_IDENTIFIER9 id;
+		if (FAILED(d3d->GetAdapterIdentifier(i, 0, &id)))
+			continue;
+
+		GfxDriver* drv = new GfxDriver;
+		drv->adapter = i;
+		drv->identifier = id;
+
+		static const D3DFORMAT formats[] = {
+			D3DFMT_X8R8G8B8,
+			D3DFMT_A8R8G8B8,
+			D3DFMT_R5G6B5
+		};
+
+		for (UINT f = 0; f < sizeof(formats) / sizeof(formats[0]); ++f) {
+
+			UINT modeCount = d3d->GetAdapterModeCount(i, formats[f]);
+
 			for (UINT j = 0; j < modeCount; ++j) {
 				D3DDISPLAYMODE mode;
-				if (SUCCEEDED(d3d->EnumAdapterModes(i, j, &mode))) {
-					if (mode.Format == D3DFMT_X8R8G8B8 ||
-						mode.Format == D3DFMT_R5G6B5 ||
-						mode.Format == D3DFMT_A8R8G8B8) {
-						GfxMode* m = new GfxMode;
-						m->mode = mode;
-						d->modes.push_back(m);
-					}
+				if (SUCCEEDED(d3d->EnumAdapterModes(i, formats[f], j, &mode)))
+				{
+					GfxMode* m = new GfxMode;
+					m->mode = mode;
+					drv->modes.push_back(m);
 				}
 			}
-			drivers.push_back(d);
 		}
+		drivers.push_back(drv);
 	}
 }
 
