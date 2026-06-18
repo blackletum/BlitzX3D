@@ -151,9 +151,11 @@ private:
 
 	int d3d_rs[160];
 	int d3d_tss[8][32];
+	DWORD d3d_ss[8][13];
 
 	void setRS(int n, int t);
 	void setTSS(int n, int s, int t);
+	void setSS(int stage, int state, int value);
 
 	void setLights();
 	void setZMode();
