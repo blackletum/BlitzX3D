@@ -2,7 +2,7 @@
 #define GXRUNTIME_H
 
 #include <Windows.h>
-#include <d3d8.h>
+#include <d3d9.h>
 #include <string>
 #include <vector>
 #include <intrin.h>

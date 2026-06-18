@@ -2,7 +2,7 @@
 #define GXLIGHT_H
 
 #include <cstring>
-#include <d3d8.h>
+#include <d3d9.h>
 
 class gxScene;
 

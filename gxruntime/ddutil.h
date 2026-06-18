@@ -1,7 +1,7 @@
 #ifndef DDUTIL_H
 #define DDUTIL_H
 
-#include <d3d8.h>
+#include <d3d9.h>
 
 class gxGraphics;
 

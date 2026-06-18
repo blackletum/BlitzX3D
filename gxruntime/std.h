@@ -1,6 +1,9 @@
 #ifndef STD_H
 #define STD_H
 
+#define _WIN32_WINNT 0x0600
+#define D3D_DEBUG_INFO
+
 #define _WINSOCKAPI_
 #define WIN32_LEAN_AND_MEAN
 #define POINTER_64 __ptr64
@@ -26,6 +29,6 @@
 
 #include <math.h>
 #include <Windows.h>
-#include <d3d8.h>
+#include <d3d9.h>
 
 #endif
