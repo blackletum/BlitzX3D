@@ -107,7 +107,7 @@ static void adjustTexSize(int* width, int* height, IDirect3DDevice9Ex* dev) {
     *height = h;
 }
 
-void ddUtil::buildMipMaps(IDirect3DTexture8* tex) {
+void ddUtil::buildMipMaps(IDirect3DTexture9* tex) {
     if (!tex) return;
     DWORD levels = tex->GetLevelCount();
     if (levels <= 1) return;
@@ -185,7 +185,7 @@ IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
     return surf;
 }
 
-IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
+IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
     IDirect3DDevice9Ex* dev = gfx->dir3dDev;
     adjustTexSize(&w, &h, dev);
 
@@ -198,7 +198,7 @@ IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
     UINT mipLevels = hasMips ? 0 : 1;
-    IDirect3DTexture8* tex = nullptr;
+    IDirect3DTexture9* tex = nullptr;
     dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
     return tex;
 }
@@ -309,7 +309,7 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
     return surf;
 }
 
-IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -344,7 +344,7 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
 
     UINT mipLevels = hasMips ? 0 : 1;
 
-    IDirect3DTexture8* tex = nullptr;
+    IDirect3DTexture9* tex = nullptr;
     HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
     if (FAILED(hr)) {
         g_lastImageError = "CreateTexture failed: " + file;

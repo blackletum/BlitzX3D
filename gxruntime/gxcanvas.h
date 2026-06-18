@@ -10,8 +10,8 @@ class gxGraphics;
 class gxCanvas {
 public:
 	gxCanvas(gxGraphics* g, IDirect3DSurface9* surf, int flags);
-	gxCanvas(gxGraphics* g, IDirect3DTexture8* tex, int flags);
-	gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* cube_tex, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DTexture9* tex, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* cube_tex, int flags);
 	~gxCanvas();
 
 	gxGraphics* graphics;
@@ -20,11 +20,11 @@ public:
 	void restore();
 
 	IDirect3DSurface9* getSurface()  const;
-	IDirect3DBaseTexture8* getTexture() const;
+	IDirect3DBaseTexture9* getTexture() const;
 
 	mutable int mod_cnt;
 
-	mutable IDirect3DTexture8* blit_tex;
+	mutable IDirect3DTexture9* blit_tex;
 	mutable int blit_tex_mod_cnt;
 	mutable unsigned blit_tex_mask;
 
@@ -51,8 +51,8 @@ private:
 	int   flags, cube_mode;
 
 	IDirect3DSurface9* plain_surf;   // non text offscreen surf
-	IDirect3DTexture8* tex;
-	IDirect3DCubeTexture8* cube_tex;
+	IDirect3DTexture9* tex;
+	IDirect3DCubeTexture9* cube_tex;
 
 	IDirect3DSurface9* cube_surfs[6];
 
@@ -161,7 +161,7 @@ public:
 	unsigned getMask()const;
 	unsigned getColor()const;
 	unsigned getClsColor()const;
-	IDirect3DBaseTexture8* getTexSurface() const;
+	IDirect3DBaseTexture9* getTexSurface() const;
 };
 
 #endif

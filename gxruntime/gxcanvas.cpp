@@ -159,7 +159,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     setViewport(0, 0, getWidth(), getHeight());
 }
 
-gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture8* t, int f) :
+gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
@@ -186,7 +186,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture8* t, int f) :
     if (flags & gxCanvas::CANVAS_TEX_MIPMAP) ddUtil::buildMipMaps(tex);
 }
 
-gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* ct, int f) :
+gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
@@ -270,7 +270,7 @@ void gxCanvas::restore() {
     if (blit_tex) { blit_tex->Release(); blit_tex = nullptr; }
     blit_tex_mod_cnt = -1;
 
-    IDirect3DTexture8* newTex = nullptr;
+    IDirect3DTexture9* newTex = nullptr;
     if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, 0,
         tdesc.Format, D3DPOOL_MANAGED, &newTex))) return;
 
@@ -286,13 +286,13 @@ IDirect3DSurface9* gxCanvas::getSurface() const {
     return surf;
 }
 
-IDirect3DBaseTexture8* gxCanvas::getTexture() const {
+IDirect3DBaseTexture9* gxCanvas::getTexture() const {
     if (cube_tex) return cube_tex;
     if (tex)      return tex;
     return nullptr;
 }
 
-IDirect3DBaseTexture8* gxCanvas::getTexSurface() const {
+IDirect3DBaseTexture9* gxCanvas::getTexSurface() const {
     if (mod_cnt != remip_cnt && tex && (flags & CANVAS_TEX_MIPMAP))
         ddUtil::buildMipMaps(tex);
     remip_cnt = mod_cnt;
@@ -503,7 +503,7 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
     damage(dest);
 }
 
-static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* src, unsigned maskRGB) {
+static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* src, unsigned maskRGB) {
     if (src->blit_tex && src->blit_tex_mod_cnt == src->mod_cnt && src->blit_tex_mask == maskRGB)
         return src->blit_tex;
 
@@ -514,7 +514,7 @@ static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* s
     int logW = src->logical_w;
     int logH = src->logical_h;
 
-    IDirect3DTexture8* newTex = nullptr;
+    IDirect3DTexture9* newTex = nullptr;
     if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex)))
         return nullptr;
 
@@ -564,7 +564,7 @@ static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* s
 }
 
 static void drawBlitQuad(IDirect3DDevice9Ex* dev,
-    IDirect3DTexture8* tex,
+    IDirect3DTexture9* tex,
     const RECT& dst,
     const RECT& srcRect,
     int texW, int texH)
@@ -613,7 +613,7 @@ static void setupBlitRenderState(IDirect3DDevice9Ex* dev, bool solid) {
 struct SavedBlitState {
     IDirect3DSurface9* oldRT;
     IDirect3DSurface9* oldDS;
-    IDirect3DBaseTexture8* oldTex;
+    IDirect3DBaseTexture9* oldTex;
     D3DVIEWPORT9 oldVP;
     DWORD oldZ, oldAlphaTest, oldAlphaFunc, oldAlphaRef, oldAlphaBlend;
     DWORD oldSrcBlend, oldDestBlend;
@@ -732,7 +732,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
     if (!dev) return;
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
-    IDirect3DTexture8* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
+    IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
     if (!blitTex) return;
 
     SavedBlitState saved;
@@ -786,7 +786,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     if (!dev) return;
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
-    IDirect3DTexture8* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
+    IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
     if (!blitTex) return;
 
     SavedBlitState saved;
@@ -828,7 +828,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     IDirect3DDevice9Ex* dev = graphics->dir3dDev;
     if (!dev) return;
 
-    IDirect3DBaseTexture8* tex = src->getTexture();
+    IDirect3DBaseTexture9* tex = src->getTexture();
     if (!tex) {
         return;
     }
@@ -869,7 +869,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     dev->SetTexture(0, tex);
 
     dev->BeginScene();
-    drawBlitQuad(dev, (IDirect3DTexture8*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
+    drawBlitQuad(dev, (IDirect3DTexture9*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
     dev->EndScene();
 
     restoreBlitState(dev, saved);

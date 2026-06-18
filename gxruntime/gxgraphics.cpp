@@ -304,7 +304,7 @@ void gxGraphics::closeMovie(gxMovie* m) {
 
 gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
-		IDirect3DTexture8* tex = ddUtil::createTextureSurface(w, h, flags, this);
+		IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, flags, this);
 		if (!tex) return nullptr;
 		gxCanvas* c = new gxCanvas(this, tex, flags);
 		canvas_set.insert(c);
@@ -321,7 +321,7 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
-		IDirect3DTexture8* tex = ddUtil::loadTextureSurface(f, flags, this);
+		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this);
 		if (!tex) return nullptr;
 		gxCanvas* c = new gxCanvas(this, tex, flags);
 		canvas_set.insert(c);
@@ -424,10 +424,10 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 	DWORD usage = D3DUSAGE_WRITEONLY;
-	IDirect3DVertexBuffer8* vb = nullptr;
+	IDirect3DVertexBuffer9* vb = nullptr;
 	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb)))
 		return nullptr;
-	IDirect3DIndexBuffer8* ib = nullptr;
+	IDirect3DIndexBuffer9* ib = nullptr;
 	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib))) {
 		vb->Release();
 		return nullptr;

@@ -2,7 +2,7 @@
 #define GXSCENE_H
 
 #include <map>
-#include <d3d.h>
+#include <d3d9.h>
 
 #include "gxlight.h"
 

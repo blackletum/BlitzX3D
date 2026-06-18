@@ -7,7 +7,7 @@ class gxGraphics;
 
 struct ddUtil {
 
-	static void buildMipMaps(IDirect3DTexture8* tex);
+	static void buildMipMaps(IDirect3DTexture9* tex);
 	static void copy(IDirect3DSurface9* dest, int dx, int dy, int dw, int dh, IDirect3DSurface9* src, int sx, int sy, int sw, int sh);
 
     // Display canvases
@@ -15,8 +15,8 @@ struct ddUtil {
     static IDirect3DSurface9* loadDisplaySurface(const std::string& file, int flags, gxGraphics* gfx);
 
     // Texture canvases
-    static IDirect3DTexture8* createTextureSurface(int w, int h, int flags, gxGraphics* gfx);
-    static IDirect3DTexture8* loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx);
+    static IDirect3DTexture9* createTextureSurface(int w, int h, int flags, gxGraphics* gfx);
+    static IDirect3DTexture9* loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx);
 
     static const std::string& getLastImageError();
 };
