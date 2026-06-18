@@ -425,10 +425,10 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 	DWORD usage = D3DUSAGE_WRITEONLY;
 	IDirect3DVertexBuffer9* vb = nullptr;
-	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, NULL)))
+	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_DEFAULT, &vb, NULL)))
 		return nullptr;
 	IDirect3DIndexBuffer9* ib = nullptr;
-	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, NULL))) {
+	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_DEFAULT, &ib, NULL))) {
 		vb->Release();
 		return nullptr;
 	}

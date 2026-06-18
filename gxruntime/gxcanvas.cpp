@@ -272,7 +272,7 @@ void gxCanvas::restore() {
     blit_tex_mod_cnt = -1;
 
     IDirect3DTexture9* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, 0, tdesc.Format, D3DPOOL_MANAGED, &newTex, NULL))) return;
+    if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, D3DUSAGE_DYNAMIC, tdesc.Format, D3DPOOL_DEFAULT, &newTex, NULL))) return;
 
     IDirect3DSurface9* newSurf = nullptr;
     newTex->GetSurfaceLevel(0, &newSurf);
