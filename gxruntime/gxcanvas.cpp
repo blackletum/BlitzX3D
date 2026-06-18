@@ -65,7 +65,7 @@ class FillRectGuard {
 public:
     FillRectGuard(IDirect3DDevice9Ex* d) : dev(d), oldRT(nullptr), oldDS(nullptr), active(false) {
         if (!dev) return;
-        dev->GetRenderTarget(&oldRT);
+        dev->GetRenderTarget(0, &oldRT);
         dev->GetDepthStencilSurface(&oldDS);
         active = true;
     }
@@ -73,7 +73,8 @@ public:
     // but it works!
     ~FillRectGuard() {
         if (!active || !dev) return;
-        dev->SetRenderTarget(oldRT, oldDS);
+        dev->SetRenderTarget(0, oldRT);
+        dev->SetDepthStencilSurface(oldDS);
         if (oldRT) oldRT->Release();
         if (oldDS) oldDS->Release();
         active = false;
@@ -88,7 +89,7 @@ void gxCanvas::fillRect(const RECT& r, unsigned argb) {
         D3DSURFACE_DESC desc;
         if (SUCCEEDED(surf->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET)) {
             FillRectGuard guard(graphics->dir3dDev);
-            if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(surf, nullptr))) {
+            if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(0, surf))) {
                 D3DRECT rect = { r.left, r.top, r.right, r.bottom };
                 if (SUCCEEDED(graphics->dir3dDev->Clear(1, &rect, D3DCLEAR_TARGET, argb, 0.0f, 0))) {
                     return;
@@ -249,9 +250,9 @@ void gxCanvas::backup() {
     if (!dev) return;
 
     if (t_surf) { t_surf->Release(); t_surf = nullptr; }
-    if (FAILED(dev->CreateImageSurface(desc.Width, desc.Height, desc.Format, &t_surf)))
+    if (FAILED(dev->CreateOffscreenPlainSurfaceEx(desc.Width, desc.Height, desc.Format, D3DPOOL_SYSTEMMEM, &t_surf, NULL, 0)))
         return;
-    dev->CopyRects(surf, nullptr, 0, t_surf, nullptr);
+    dev->UpdateSurface(surf, nullptr, t_surf, nullptr);
 }
 
 void gxCanvas::restore() {
@@ -271,12 +272,11 @@ void gxCanvas::restore() {
     blit_tex_mod_cnt = -1;
 
     IDirect3DTexture9* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, 0,
-        tdesc.Format, D3DPOOL_MANAGED, &newTex))) return;
+    if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, 0, tdesc.Format, D3DPOOL_MANAGED, &newTex, NULL))) return;
 
     IDirect3DSurface9* newSurf = nullptr;
     newTex->GetSurfaceLevel(0, &newSurf);
-    dev->CopyRects(t_surf, nullptr, 0, newSurf, nullptr);
+    dev->UpdateSurface(t_surf, nullptr, newSurf, nullptr);
 
     tex = newTex;
     surf = newSurf;
@@ -345,10 +345,10 @@ bool gxCanvas::attachZBuffer() {
     D3DSURFACE_DESC desc;
     surf->GetDesc(&desc);
     IDirect3DDevice9Ex* dev = graphics->dir3dDev;
-    HRESULT hr = dev->CreateDepthStencilSurface(desc.Width, desc.Height, graphics->zbuffFmt, D3DMULTISAMPLE_NONE, &z_surf);
+    HRESULT hr = dev->CreateDepthStencilSurfaceEx(desc.Width, desc.Height, graphics->zbuffFmt, D3DMULTISAMPLE_NONE, 0, FALSE, &z_surf, NULL, 0);
     if (FAILED(hr) || !z_surf) {
         char buf[256];
-        sprintf(buf, "CreateDepthStencilSurface failed: 0x%08X", hr);
+        sprintf(buf, "CreateDepthStencilSurfaceEx failed: 0x%08X", hr);
         MessageBoxA(NULL, buf, "Error", MB_OK);
         return false;
     }
@@ -515,7 +515,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* s
     int logH = src->logical_h;
 
     IDirect3DTexture9* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex)))
+    if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex, NULL)))
         return nullptr;
 
     IDirect3DSurface9* texSurf = nullptr;
@@ -587,7 +587,7 @@ static void drawBlitQuad(IDirect3DDevice9Ex* dev,
     };
 
     dev->SetTexture(0, tex);
-    dev->SetVertexShader(QUAD_FVF);
+    dev->SetFVF(QUAD_FVF);
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, verts, sizeof(QuadVertex));
 }
 
@@ -597,8 +597,8 @@ static void setupBlitRenderState(IDirect3DDevice9Ex* dev, bool solid) {
     dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
     dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
     dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
-    dev->SetTextureStageState(0, D3DTSS_MAGFILTER, D3DTEXF_POINT);
-    dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
     if (!solid) {
         dev->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
         dev->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATER);
@@ -622,7 +622,7 @@ struct SavedBlitState {
 };
 
 static void saveBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
-    dev->GetRenderTarget(&s.oldRT);
+    dev->GetRenderTarget(0, &s.oldRT);
     dev->GetDepthStencilSurface(&s.oldDS);
     dev->GetTexture(0, &s.oldTex);
     dev->GetViewport(&s.oldVP);
@@ -640,12 +640,13 @@ static void saveBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
     dev->GetTextureStageState(0, D3DTSS_COLORARG2, &s.oldCArg2);
     dev->GetTextureStageState(0, D3DTSS_ALPHAOP, &s.oldAOp);
     dev->GetTextureStageState(0, D3DTSS_ALPHAARG1, &s.oldAArg1);
-    dev->GetTextureStageState(0, D3DTSS_MAGFILTER, &s.oldMag);
-    dev->GetTextureStageState(0, D3DTSS_MINFILTER, &s.oldMin);
+    dev->GetSamplerState(0, D3DSAMP_MAGFILTER, &s.oldMag);
+    dev->GetSamplerState(0, D3DSAMP_MINFILTER, &s.oldMin);
 }
 
 static void restoreBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
-    dev->SetRenderTarget(s.oldRT, s.oldDS);
+    dev->SetRenderTarget(0, s.oldRT);
+    dev->SetDepthStencilSurface(s.oldDS);
     if (s.oldRT) s.oldRT->Release();
     if (s.oldDS) s.oldDS->Release();
     dev->SetViewport(&s.oldVP);
@@ -663,8 +664,8 @@ static void restoreBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
     dev->SetTextureStageState(0, D3DTSS_COLORARG2, s.oldCArg2);
     dev->SetTextureStageState(0, D3DTSS_ALPHAOP, s.oldAOp);
     dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, s.oldAArg1);
-    dev->SetTextureStageState(0, D3DTSS_MAGFILTER, s.oldMag);
-    dev->SetTextureStageState(0, D3DTSS_MINFILTER, s.oldMin);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, s.oldMag);
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, s.oldMin);
     dev->SetTexture(0, s.oldTex);
     if (s.oldTex) s.oldTex->Release();
 }
@@ -738,7 +739,8 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
     SavedBlitState saved;
     saveBlitState(dev, saved);
 
-    dev->SetRenderTarget(surf, nullptr);
+    dev->SetRenderTarget(0, surf);
+    dev->SetDepthStencilSurface(nullptr);
 
     D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
@@ -792,14 +794,14 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     SavedBlitState saved;
     saveBlitState(dev, saved);
 
-    dev->SetRenderTarget(surf, nullptr);
+    dev->SetRenderTarget(0, surf);
 
     D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
     setupBlitRenderState(dev, solid);
-    dev->SetTextureStageState(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-    dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 
     dev->BeginScene();
     drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
@@ -836,7 +838,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     SavedBlitState saved;
     saveBlitState(dev, saved);
 
-    dev->SetRenderTarget(surf, nullptr);
+    dev->SetRenderTarget(0, surf);
 
     D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
@@ -858,12 +860,12 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
 
     if (filter) {
-        dev->SetTextureStageState(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-        dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+        dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
     }
     else {
-        dev->SetTextureStageState(0, D3DTSS_MAGFILTER, D3DTEXF_POINT);
-        dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
+        dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
     }
 
     dev->SetTexture(0, tex);
