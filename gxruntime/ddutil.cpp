@@ -158,7 +158,7 @@ void ddUtil::copy(IDirect3DSurface9* dest_surf, int dx, int dy, int dw, int dh,
     dest_surf->GetDesc(&dst_desc);
 
     if (FAILED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) return;
-    if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, D3DLOCK_DISCARD | D3DLOCK_NOSYSLOCK))) { src_surf->UnlockRect(); return; }
+    if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, 0))) { src_surf->UnlockRect(); return; }
 
     PixelFormat src_fmt(src_desc.Format);
     PixelFormat dst_fmt(dst_desc.Format);
