@@ -181,7 +181,7 @@ void ddUtil::copy(IDirect3DSurface9* dest_surf, int dx, int dy, int dw, int dh,
 
 IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
     IDirect3DSurface9* surf = nullptr;
-    gfx->dir3dDev->CreateImageSurface(w, h, D3DFMT_A8R8G8B8, &surf);
+    gfx->dir3dDev->CreateOffscreenPlainSurfaceEx(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, NULL, 0);
     return surf;
 }
 
@@ -197,9 +197,16 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    UINT mipLevels = hasMips ? 0 : 1;
+    UINT mipLevels = 1;
+    DWORD usage = D3DUSAGE_DYNAMIC;
+    //dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, NULL);
+    //unfortunately with how DX9Ex is set up, we cannot goon, and play games all day, D3DPOOL_MANAGED is no longer the correct approach!
     IDirect3DTexture9* tex = nullptr;
-    dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    HRESULT hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, D3DPOOL_DEFAULT, &tex, nullptr);
+    if (FAILED(hr)) {
+        return nullptr;
+    }
+
     return tex;
 }
 
@@ -253,7 +260,7 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
     int h = FreeImage_GetHeight(fib32);
 
     IDirect3DSurface9* surf = nullptr;
-    if (FAILED(gfx->dir3dDev->CreateImageSurface(w, h, D3DFMT_A8R8G8B8, &surf))) {
+    if (FAILED(gfx->dir3dDev->CreateOffscreenPlainSurfaceEx(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, NULL, 0))) {
         g_lastImageError = "CreateImageSurface failed: " + file;
         FreeImage_Unload(fib32);
         return nullptr;
@@ -342,10 +349,11 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     D3DFORMAT fmt = D3DFMT_A8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    UINT mipLevels = hasMips ? 0 : 1;
-
+    UINT mipLevels = 1;
+    DWORD usage = D3DUSAGE_DYNAMIC;
+    D3DPOOL pool = D3DPOOL_DEFAULT;
     IDirect3DTexture9* tex = nullptr;
-    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, pool, &tex, nullptr);
     if (FAILED(hr)) {
         g_lastImageError = "CreateTexture failed: " + file;
         FreeImage_Unload(fib32);
@@ -403,6 +411,6 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     tex->UnlockRect(0);
     FreeImage_Unload(fib32);
 
-    if (hasMips) buildMipMaps(tex);
+    // if (hasMips) buildMipMaps(tex);
     return tex;
 }

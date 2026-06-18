@@ -141,7 +141,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     graphics(g), plain_surf(s), tex(nullptr), cube_tex(nullptr), surf(s), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(false) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     D3DSURFACE_DESC desc;
@@ -164,7 +164,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(true) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     tex->GetSurfaceLevel(0, &surf);
@@ -191,7 +191,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(true) {
 
     D3DCUBEMAP_FACES faceMap[6] = {
         D3DCUBEMAP_FACE_NEGATIVE_X,
@@ -515,7 +515,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* s
     int logH = src->logical_h;
 
     IDirect3DTexture9* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex, NULL)))
+    if (FAILED(dev->CreateTexture(texW, texH, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &newTex, NULL)))
         return nullptr;
 
     IDirect3DSurface9* texSurf = nullptr;
@@ -526,7 +526,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* s
     if (FAILED(src->surf->LockRect(&srcLR, &srcRect, D3DLOCK_READONLY))) {
         texSurf->Release(); newTex->Release(); return nullptr;
     }
-    if (FAILED(texSurf->LockRect(&dstLR, nullptr, 0))) {
+    if (FAILED(texSurf->LockRect(&dstLR, nullptr, D3DLOCK_DISCARD))) {
         src->surf->UnlockRect(); texSurf->Release(); newTex->Release(); return nullptr;
     }
 
@@ -972,7 +972,10 @@ bool gxCanvas::rect_collide(int x1, int y1, int x2, int y2, int w2, int h2, bool
 bool gxCanvas::lock() const {
     if (!locked_cnt++) {
         D3DLOCKED_RECT lr;
-        if (FAILED(surf->LockRect(&lr, nullptr, D3DLOCK_NOSYSLOCK))) {
+        //if (FAILED(surf->LockRect(&lr, nullptr, D3DLOCK_NOSYSLOCK))) {
+        DWORD lockFlags = D3DLOCK_NOSYSLOCK;
+        if (isDynamic) lockFlags |= D3DLOCK_DISCARD;
+        if (FAILED(surf->LockRect(&lr, nullptr, lockFlags))) {
             --locked_cnt;
             return false;
         }

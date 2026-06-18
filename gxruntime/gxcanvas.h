@@ -47,6 +47,8 @@ public:
 	IDirect3DSurface9* surf;             // the "active" surf
 	IDirect3DSurface9* z_surf;           // depth/stencil surf
 
+	bool isDynamic; // true if created with D3DUSAGE_DYNAMIC
+
 private:
 	int   flags, cube_mode;
 

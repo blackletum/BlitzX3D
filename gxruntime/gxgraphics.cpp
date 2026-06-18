@@ -116,7 +116,7 @@ bool gxGraphics::restore() {
 		if (FAILED(hr)) return false;
 
 		IDirect3DSurface9* newBack = nullptr;
-		hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+		hr = dir3dDev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &newBack);
 		if (FAILED(hr) || !newBack) return false;
 
 		if (runtime->backBuffer) runtime->backBuffer->Release();
@@ -201,11 +201,11 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	present_params.Windowed = !fullscreen;
 	if (fullscreen) {
 		present_params.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
-		present_params.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+		present_params.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
 	}
 	else {
 		present_params.FullScreen_RefreshRateInHz = 0;
-		present_params.FullScreen_PresentationInterval = 0;
+		present_params.PresentationInterval = 0;
 	}
 
 	HRESULT hr = dir3dDev->Reset(&present_params);
@@ -217,7 +217,7 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	}
 
 	IDirect3DSurface9* newBack = nullptr;
-	hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+	hr = dir3dDev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &newBack);
 	if (FAILED(hr) || !newBack) {
 		runtime->debugLog("GetBackBuffer failed");
 		return false;
@@ -425,10 +425,10 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 	DWORD usage = D3DUSAGE_WRITEONLY;
 	IDirect3DVertexBuffer9* vb = nullptr;
-	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb)))
+	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, NULL)))
 		return nullptr;
 	IDirect3DIndexBuffer9* ib = nullptr;
-	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib))) {
+	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, NULL))) {
 		vb->Release();
 		return nullptr;
 	}
