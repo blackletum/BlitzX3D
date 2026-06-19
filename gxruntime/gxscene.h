@@ -16,7 +16,7 @@ class gxTexture;
 class gxScene {
 public:
 	gxGraphics* graphics;
-	IDirect3DDevice9Ex* dir3dDev;
+	IDirect3DDevice9* dir3dDev;
 
 	gxScene(gxGraphics* graphics, gxCanvas* target);
 	~gxScene();

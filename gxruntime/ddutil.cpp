@@ -71,7 +71,7 @@ static void buildAlphaInverse(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h
     }
 }
 
-static void adjustTexSize(int* width, int* height, IDirect3DDevice9Ex* dev) {
+static void adjustTexSize(int* width, int* height, IDirect3DDevice9* dev) {
     D3DCAPS9 caps;
     if (FAILED(dev->GetDeviceCaps(&caps))) {
         *width = *height = 256;
@@ -181,12 +181,12 @@ void ddUtil::copy(IDirect3DSurface9* dest_surf, int dx, int dy, int dw, int dh,
 
 IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
     IDirect3DSurface9* surf = nullptr;
-    gfx->dir3dDev->CreateOffscreenPlainSurfaceEx(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, NULL, 0);
+    gfx->dir3dDev->CreateOffscreenPlainSurface(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, NULL);
     return surf;
 }
 
 IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
-    IDirect3DDevice9Ex* dev = gfx->dir3dDev;
+    IDirect3DDevice9* dev = gfx->dir3dDev;
     adjustTexSize(&w, &h, dev);
 
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
@@ -197,12 +197,12 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    UINT mipLevels = 1;
-    DWORD usage = D3DUSAGE_DYNAMIC;
-    //dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, NULL);
-    //unfortunately with how DX9Ex is set up, we cannot goon, and play games all day, D3DPOOL_MANAGED is no longer the correct approach!
+    UINT mipLevels = hasMips ? 0 : 1;
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
+
     IDirect3DTexture9* tex = nullptr;
-    HRESULT hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, D3DPOOL_DEFAULT, &tex, nullptr);
+    HRESULT hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, pool, &tex, nullptr);
     if (FAILED(hr)) {
         return nullptr;
     }
@@ -260,7 +260,7 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
     int h = FreeImage_GetHeight(fib32);
 
     IDirect3DSurface9* surf = nullptr;
-    if (FAILED(gfx->dir3dDev->CreateOffscreenPlainSurfaceEx(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, NULL, 0))) {
+    if (FAILED(gfx->dir3dDev->CreateOffscreenPlainSurface(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, NULL))) {
         g_lastImageError = "CreateImageSurface failed: " + file;
         FreeImage_Unload(fib32);
         return nullptr;
@@ -349,9 +349,10 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     D3DFORMAT fmt = D3DFMT_A8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    UINT mipLevels = 1;
-    DWORD usage = D3DUSAGE_DYNAMIC;
-    D3DPOOL pool = D3DPOOL_DEFAULT;
+    UINT mipLevels = hasMips ? 0 : 1;
+
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
     IDirect3DTexture9* tex = nullptr;
     HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, pool, &tex, nullptr);
     if (FAILED(hr)) {
@@ -411,6 +412,6 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     tex->UnlockRect(0);
     FreeImage_Unload(fib32);
 
-    // if (hasMips) buildMipMaps(tex);
+    if (hasMips) buildMipMaps(tex);
     return tex;
 }

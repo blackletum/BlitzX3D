@@ -57,13 +57,13 @@ static bool clip(const RECT& viewport, RECT* d, RECT* s) {
 }
 
 class FillRectGuard {
-    IDirect3DDevice9Ex* dev;
+    IDirect3DDevice9* dev;
     IDirect3DSurface9* oldRT;
     IDirect3DSurface9* oldDS;
     bool active;
 
 public:
-    FillRectGuard(IDirect3DDevice9Ex* d) : dev(d), oldRT(nullptr), oldDS(nullptr), active(false) {
+    FillRectGuard(IDirect3DDevice9* d) : dev(d), oldRT(nullptr), oldDS(nullptr), active(false) {
         if (!dev) return;
         dev->GetRenderTarget(0, &oldRT);
         dev->GetDepthStencilSurface(&oldDS);
@@ -164,7 +164,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(true) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(false) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     tex->GetSurfaceLevel(0, &surf);
@@ -191,7 +191,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(true) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), isDynamic(false) {
 
     D3DCUBEMAP_FACES faceMap[6] = {
         D3DCUBEMAP_FACE_NEGATIVE_X,
@@ -246,11 +246,11 @@ void gxCanvas::backup() {
     D3DSURFACE_DESC desc;
     if (FAILED(surf->GetDesc(&desc))) return;
 
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
+    IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
     if (t_surf) { t_surf->Release(); t_surf = nullptr; }
-    if (FAILED(dev->CreateOffscreenPlainSurfaceEx(desc.Width, desc.Height, desc.Format, D3DPOOL_SYSTEMMEM, &t_surf, NULL, 0)))
+    if (FAILED(dev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format, D3DPOOL_SYSTEMMEM, &t_surf, NULL)))
         return;
     dev->UpdateSurface(surf, nullptr, t_surf, nullptr);
 }
@@ -261,7 +261,7 @@ void gxCanvas::restore() {
     D3DSURFACE_DESC tdesc;
     t_surf->GetDesc(&tdesc);
 
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
+    IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
     tex = nullptr;
@@ -272,7 +272,7 @@ void gxCanvas::restore() {
     blit_tex_mod_cnt = -1;
 
     IDirect3DTexture9* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, D3DUSAGE_DYNAMIC, tdesc.Format, D3DPOOL_DEFAULT, &newTex, NULL))) return;
+    if (FAILED(dev->CreateTexture(tdesc.Width, tdesc.Height, 1, 0, tdesc.Format, D3DPOOL_DEFAULT, &newTex, NULL))) return;
 
     IDirect3DSurface9* newSurf = nullptr;
     newTex->GetSurfaceLevel(0, &newSurf);
@@ -344,8 +344,8 @@ bool gxCanvas::attachZBuffer() {
     if (z_surf) return true;
     D3DSURFACE_DESC desc;
     surf->GetDesc(&desc);
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
-    HRESULT hr = dev->CreateDepthStencilSurfaceEx(desc.Width, desc.Height, graphics->zbuffFmt, D3DMULTISAMPLE_NONE, 0, FALSE, &z_surf, NULL, 0);
+    IDirect3DDevice9* dev = graphics->dir3dDev;
+    HRESULT hr = dev->CreateDepthStencilSurface(desc.Width, desc.Height, graphics->zbuffFmt, D3DMULTISAMPLE_NONE, 0, FALSE, &z_surf, NULL);
     if (FAILED(hr) || !z_surf) {
         char buf[256];
         sprintf(buf, "CreateDepthStencilSurfaceEx failed: 0x%08X", hr);
@@ -503,7 +503,7 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
     damage(dest);
 }
 
-static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* src, unsigned maskRGB) {
+static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src, unsigned maskRGB) {
     if (src->blit_tex && src->blit_tex_mod_cnt == src->mod_cnt && src->blit_tex_mask == maskRGB)
         return src->blit_tex;
 
@@ -563,7 +563,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9Ex* dev, gxCanvas* s
     return newTex;
 }
 
-static void drawBlitQuad(IDirect3DDevice9Ex* dev,
+static void drawBlitQuad(IDirect3DDevice9* dev,
     IDirect3DTexture9* tex,
     const RECT& dst,
     const RECT& srcRect,
@@ -591,7 +591,7 @@ static void drawBlitQuad(IDirect3DDevice9Ex* dev,
     dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, verts, sizeof(QuadVertex));
 }
 
-static void setupBlitRenderState(IDirect3DDevice9Ex* dev, bool solid) {
+static void setupBlitRenderState(IDirect3DDevice9* dev, bool solid) {
     dev->SetRenderState(D3DRS_ZENABLE, FALSE);
     dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
     dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
@@ -621,7 +621,7 @@ struct SavedBlitState {
     DWORD oldCOp, oldCArg1, oldCArg2, oldAOp, oldAArg1, oldMag, oldMin;
 };
 
-static void saveBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
+static void saveBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     dev->GetRenderTarget(0, &s.oldRT);
     dev->GetDepthStencilSurface(&s.oldDS);
     dev->GetTexture(0, &s.oldTex);
@@ -644,7 +644,7 @@ static void saveBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
     dev->GetSamplerState(0, D3DSAMP_MINFILTER, &s.oldMin);
 }
 
-static void restoreBlitState(IDirect3DDevice9Ex* dev, SavedBlitState& s) {
+static void restoreBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     dev->SetRenderTarget(0, s.oldRT);
     dev->SetDepthStencilSurface(s.oldDS);
     if (s.oldRT) s.oldRT->Release();
@@ -729,7 +729,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
         return;
     }
 
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
+    IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
@@ -784,7 +784,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
         return;
     }
 
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
+    IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
@@ -827,7 +827,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
         return;
     }
 
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
+    IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
     IDirect3DBaseTexture9* tex = src->getTexture();

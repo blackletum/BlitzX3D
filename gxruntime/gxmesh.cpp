@@ -74,7 +74,7 @@ void gxMesh::restore() {
 void gxMesh::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
     unlock();
 
-    IDirect3DDevice9Ex* dev = graphics->dir3dDev;
+    IDirect3DDevice9* dev = graphics->dir3dDev;
 
     dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxVertex));
     dev->SetFVF(VTXFMT);
