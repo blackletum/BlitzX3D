@@ -55,7 +55,7 @@ private:
 	std::set<std::string> font_res;
 
 	DDGAMMARAMP _gammaRamp;
-	IDirectDrawGammaControl* _gamma;
+	IDirectDrawGammaControl* _gamma = nullptr;
 
 	/***** GX INTERFACE *****/
 public:
