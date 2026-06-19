@@ -1,5 +1,4 @@
 #include "std.h"
-#include <atomic>
 
 #include "bbblitz3d.h"
 #include "bbgraphics.h"
@@ -389,19 +388,10 @@ int bbAvailVirtual() {
 
 //Note: modify canvas->backup() to NOT release backup image!
 Texture* bbLoadTexture(BBStr* file, int flags) {
-	static std::atomic<bool> is_loading{ false };
-
-	if (is_loading.exchange(true)) {
-		gx_runtime->debugLog("ERROR: Reentrant call to bbLoadTexture detected, returning NULL");
-		return nullptr;
-	}
-
 	debug3d("LoadTexture");
 	Texture* t = new Texture(*file, flags); delete file;
 	if (!t->getCanvas(0)) { delete t; return 0; }
-
 	texture_set.insert(t);
-	is_loading = false;
 	return t;
 }
 
@@ -543,21 +533,12 @@ Brush* bbCreateBrush(float r, float g, float b) {
 }
 
 Brush* bbLoadBrush(BBStr* file, int flags, float u_scale, float v_scale) {
-	static std::atomic<bool> is_loading{ false };
-
-	if (is_loading.exchange(true)) {
-		gx_runtime->debugLog("ERROR: Reentrant call to bbLoadBrush detected, returning NULL");
-		return nullptr;
-	}
-
 	debug3d("LoadBrush");
 	Texture t(*file, flags);
 	delete file; if (!t.getCanvas(0)) return 0;
 	if (u_scale != 1 || v_scale != 1) t.setScale(1 / u_scale, 1 / v_scale);
-
 	Brush* br = bbCreateBrush(255, 255, 255);
 	br->setTexture(0, t, 0);
-	is_loading = false;
 	return br;
 }
 
