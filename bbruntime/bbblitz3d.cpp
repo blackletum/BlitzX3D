@@ -406,23 +406,14 @@ Texture* bbLoadTexture(BBStr* file, int flags) {
 }
 
 Texture* bbLoadAnimTexture(BBStr* file, int flags, int w, int h, int first, int cnt) {
-	static std::atomic<bool> is_loading{ false };
-
-	if (is_loading.exchange(true)) {
-		gx_runtime->debugLog("ERROR: Reentrant call to bbLoadAnimTexture detected, returning NULL");
-		return nullptr;
-	}
-
 	debug3d("LoadAnimTexture");
 	Texture* t = new Texture(*file, flags, w, h, first, cnt);
 	delete file;
 	if (!t->getCanvas(0)) {
 		delete t;
-		is_loading = false;
 		return 0;
 	}
 	texture_set.insert(t);
-	is_loading = false;
 	return t;
 }
 
