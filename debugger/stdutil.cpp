@@ -100,8 +100,9 @@ std::string filenamepath(const std::string& t) {
 }
 
 std::string filenamefile(const std::string& t) {
-	char buff[MAX_PATH + 1], * p;
-	GetFullPathName(t.c_str(), MAX_PATH, buff, &p);
-	if(!p) return "";
+	char buff[MAX_PATH + 1];
+	char* p = nullptr;
+	DWORD len = GetFullPathNameA(t.c_str(), MAX_PATH, buff, &p);
+	if (len == 0 || len > MAX_PATH || !p) return std::string();
 	return std::string(p);
 }

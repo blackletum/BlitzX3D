@@ -80,6 +80,10 @@ struct CachedTexture::Rep {
 			int y = (first / x_tiles) * h;
 			while (cnt--) {
 				gxCanvas* p = gx_graphics->createCanvas(w, h, flags);
+				if (!p) {
+					gx_graphics->freeCanvas(t);
+					return;
+				}
 				gx_graphics->copy(p, 0, 0, p->getWidth(), p->getHeight(), t, x, y, w, h);
 				frames.push_back(p);
 				x = x + w; if (x + w > t->getWidth()) { x = 0; y = y + h; }

@@ -56,7 +56,6 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9
 }
 
 gxGraphics::~gxGraphics() {
-	if (_gamma) _gamma->Release();
 	while (scene_set.size()) freeScene(*scene_set.begin());
 	while (movie_set.size()) closeMovie(*movie_set.begin());
 	while (font_set.size()) freeFont(*font_set.begin());
