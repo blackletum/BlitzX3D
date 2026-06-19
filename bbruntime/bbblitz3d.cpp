@@ -23,19 +23,6 @@
 #include "../blitz3d/cachedtexture.h"
 #include "../MultiLang/MultiLang.h"
 
-static std::atomic<bool> g_texture_loading{ false };
-
-struct TextureLoadGuard {
-	TextureLoadGuard() {
-		if (g_texture_loading.exchange(true)) {
-			ErrorLog("TextureLoad", "Reentrant texture loading detected. Aaborting!");
-		}
-	}
-	~TextureLoadGuard() {
-		g_texture_loading = false;
-	}
-	bool isReentrant() const { return g_texture_loading; }
-};
 
 //Why is everything static?
 gxScene* gx_scene;
@@ -402,32 +389,40 @@ int bbAvailVirtual() {
 
 //Note: modify canvas->backup() to NOT release backup image!
 Texture* bbLoadTexture(BBStr* file, int flags) {
-	TextureLoadGuard guard;
-	if (guard.isReentrant()) return nullptr;
+	static std::atomic<bool> is_loading{ false };
+
+	if (is_loading.exchange(true)) {
+		gx_runtime->debugLog("ERROR: Reentrant call to bbLoadTexture detected, returning NULL");
+		return nullptr;
+	}
 
 	debug3d("LoadTexture");
-	Texture* t = new Texture(*file, flags);
-	delete file;
-	if (!t->getCanvas(0)) {
-		delete t;
-		return 0;
-	}
+	Texture* t = new Texture(*file, flags); delete file;
+	if (!t->getCanvas(0)) { delete t; return 0; }
+
 	texture_set.insert(t);
+	is_loading = false;
 	return t;
 }
 
 Texture* bbLoadAnimTexture(BBStr* file, int flags, int w, int h, int first, int cnt) {
-	TextureLoadGuard guard;
-	if (guard.isReentrant()) return nullptr;
+	static std::atomic<bool> is_loading{ false };
+
+	if (is_loading.exchange(true)) {
+		gx_runtime->debugLog("ERROR: Reentrant call to bbLoadAnimTexture detected, returning NULL");
+		return nullptr;
+	}
 
 	debug3d("LoadAnimTexture");
 	Texture* t = new Texture(*file, flags, w, h, first, cnt);
 	delete file;
 	if (!t->getCanvas(0)) {
 		delete t;
+		is_loading = false;
 		return 0;
 	}
 	texture_set.insert(t);
+	is_loading = false;
 	return t;
 }
 
@@ -557,17 +552,21 @@ Brush* bbCreateBrush(float r, float g, float b) {
 }
 
 Brush* bbLoadBrush(BBStr* file, int flags, float u_scale, float v_scale) {
-	TextureLoadGuard guard;
-	if (guard.isReentrant()) return nullptr;
+	static std::atomic<bool> is_loading{ false };
+
+	if (is_loading.exchange(true)) {
+		gx_runtime->debugLog("ERROR: Reentrant call to bbLoadBrush detected, returning NULL");
+		return nullptr;
+	}
 
 	debug3d("LoadBrush");
 	Texture t(*file, flags);
-	delete file;
-	if (!t.getCanvas(0)) return 0;
-	if (u_scale != 1 || v_scale != 1)
-		t.setScale(1 / u_scale, 1 / v_scale);
+	delete file; if (!t.getCanvas(0)) return 0;
+	if (u_scale != 1 || v_scale != 1) t.setScale(1 / u_scale, 1 / v_scale);
+
 	Brush* br = bbCreateBrush(255, 255, 255);
 	br->setTexture(0, t, 0);
+	is_loading = false;
 	return br;
 }
 
