@@ -35,6 +35,7 @@ public:
 
 	struct GfxMode;
 	struct GfxDriver;
+	struct MonitorInfo;
 
 private:
 	gxRuntime(HINSTANCE hinst, const std::string& cmd_line, HWND hwnd);
@@ -63,9 +64,12 @@ private:
 	std::vector<GfxDriver*> drivers;
 	GfxDriver* curr_driver;
 	int use_di;
+	std::vector<MonitorInfo*> monitors;
 
 	void enumGfx();
 	void denumGfx();
+	void enumMonitors();
+	void denumMonitors();
 
 	void resetInput();
 	void pauseAudio();
@@ -137,6 +141,13 @@ public:
 	bool focus();
 	int desktopWidth();
 	int desktopHeight();
+
+	int numMonitors();
+	void monitorInfo(int monitor, int* x, int* y, int* w, int* h, int* primary, std::string* name);
+	int currentMonitor();
+	int findDriverForMonitor(int monitor);
+	bool moveWindowToMonitor(int monitor); //windowed / borderless only
+	int displayMode();
 
 	gxFileSystem* openFileSystem(int flags);
 	void closeFileSystem(gxFileSystem* filesys);

@@ -27,6 +27,17 @@ int		 bbTotalVidMem();
 float    bbDPIScaleX();
 float    bbDPIScaleY();
 
+//monitor info / switching
+int      bbCountMonitors();
+int      bbMonitorX(int monitor);
+int      bbMonitorY(int monitor);
+int      bbMonitorWidth(int monitor);
+int      bbMonitorHeight(int monitor);
+int      bbMonitorPrimary(int monitor);
+BBStr* bbMonitorName(int monitor);
+int      bbCurrentMonitor();
+int      bbMoveAppToMonitor(int monitor);
+
 //mode functions
 void	 bbGraphics(int w, int h, int d, int mode);
 gxCanvas* bbFrontBuffer();

@@ -38,6 +38,8 @@ private:
 
 static int gx_driver;	//Current graphics driver index.
 
+static int last_w, last_h, last_d, last_flags;
+
 static bool filter;
 static bool auto_dirty;
 static bool auto_midhandle;
@@ -75,6 +77,11 @@ static inline void debugDriver(int n, const char* function)
 static inline void debugMode(int n, const char* function)
 {
     if (n<1 || n>gfx_modes.size()) ErrorLog(function, MultiLang::illegal_graphics_mode_index);
+}
+
+static inline void debugMonitor(int n, const char* function)
+{
+    if (n < 1 || n > gx_runtime->numMonitors()) ErrorLog(function, "Illlegal monitor index!");
 }
 
 void bbFreeImage(bbImage* i);
@@ -410,6 +417,7 @@ static void graphics(int w, int h, int d, int flags)
     if (!gx_runtime->idle()) RTEX(0);
     if (!gx_graphics)
         RTEX(MultiLang::unable_create_gxgraphics_instance);
+    last_w = w; last_h = h; last_d = d; last_flags = flags;
     curr_clsColor = 0;
     curr_color = 0xffffffff;
     curr_font = gx_graphics->getDefaultFont();
@@ -489,6 +497,102 @@ int bbDesktopWidth()
 int bbDesktopHeight()
 {
     return gx_runtime->desktopHeight();
+}
+
+int bbCountMonitors()
+{
+    return gx_runtime->numMonitors();
+}
+
+int bbMonitorX(int monitor)
+{
+    debugMonitor(monitor, "MonitorX");
+    int x, y, w, h, primary; std::string name;
+    gx_runtime->monitorInfo(monitor - 1, &x, &y, &w, &h, &primary, &name);
+    return x;
+}
+
+int bbMonitorY(int monitor)
+{
+    debugMonitor(monitor, "MonitorY");
+    int x, y, w, h, primary; std::string name;
+    gx_runtime->monitorInfo(monitor - 1, &x, &y, &w, &h, &primary, &name);
+    return y;
+}
+
+int bbMonitorWidth(int monitor)
+{
+    debugMonitor(monitor, "MonitorWidth");
+    int x, y, w, h, primary; std::string name;
+    gx_runtime->monitorInfo(monitor - 1, &x, &y, &w, &h, &primary, &name);
+    return w;
+}
+
+int bbMonitorHeight(int monitor)
+{
+    debugMonitor(monitor, "MonitorHeight");
+    int x, y, w, h, primary; std::string name;
+    gx_runtime->monitorInfo(monitor - 1, &x, &y, &w, &h, &primary, &name);
+    return h;
+}
+
+int bbMonitorPrimary(int monitor)
+{
+    debugMonitor(monitor, "MonitorPrimary");
+    int x, y, w, h, primary; std::string name;
+    gx_runtime->monitorInfo(monitor - 1, &x, &y, &w, &h, &primary, &name);
+    return primary;
+}
+
+BBStr* bbMonitorName(int monitor)
+{
+    debugMonitor(monitor, "MonitorName");
+    int x, y, w, h, primary; std::string name;
+    gx_runtime->monitorInfo(monitor - 1, &x, &y, &w, &h, &primary, &name);
+    return new BBStr(name);
+}
+
+int bbCurrentMonitor()
+{
+    int n = gx_runtime->currentMonitor();
+    return n < 0 ? 0 : n + 1;
+}
+
+int bbMoveAppToMonitor(int monitor)
+{
+    debugMonitor(monitor, "MoveAppToMonitor");
+
+    if (gx_runtime->displayMode() == gxRuntime::GMODE_EXCLUSIVE)
+    {
+        int driver = gx_runtime->findDriverForMonitor(monitor - 1);
+        if (driver < 0) return 0;
+
+        bool was3d = (last_flags & gxGraphics::GRAPHICS_3D) ? true : false;
+
+        gx_driver = driver;
+        gfx_modes.clear();
+
+        freeGraphics();
+        gx_runtime->closeGraphics(gx_graphics);
+        gx_graphics = gx_runtime->openGraphics(last_w, last_h, last_d, gx_driver, last_flags);
+        if (!gx_runtime->idle()) RTEX(0);
+        if (!gx_graphics) RTEX(MultiLang::unable_create_gxgraphics_instance);
+
+        curr_clsColor = 0;
+        curr_color = 0xffffffff;
+        curr_font = gx_graphics->getDefaultFont();
+        gxCanvas* buff = was3d ? gx_graphics->getBackCanvas() : gx_graphics->getFrontCanvas();
+        bbSetBuffer(buff);
+
+        if (was3d)
+        {
+            extern void blitz3d_open();
+            blitz3d_open();
+        }
+        return 1;
+    }
+
+    return gx_runtime->moveWindowToMonitor(monitor - 1) ? 1 : 0;
 }
 
 void  bbSetGamma(int r, int g, int b, float dr, float dg, float db)
@@ -1573,6 +1677,16 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
 
     rtSym("%DesktopWidth", bbDesktopWidth);
     rtSym("%DesktopHeight", bbDesktopHeight);
+
+    rtSym("%CountMonitors", bbCountMonitors);
+    rtSym("%MonitorX%monitor", bbMonitorX);
+    rtSym("%MonitorY%monitor", bbMonitorY);
+    rtSym("%MonitorWidth%monitor", bbMonitorWidth);
+    rtSym("%MonitorHeight%monitor", bbMonitorHeight);
+    rtSym("%MonitorPrimary%monitor", bbMonitorPrimary);
+    rtSym("$MonitorName%monitor", bbMonitorName);
+    rtSym("%CurrentMonitor", bbCurrentMonitor);
+    rtSym("%MoveAppToMonitor%monitor", bbMoveAppToMonitor);
 }
 
 extern "C" {

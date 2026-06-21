@@ -14,6 +14,15 @@ struct gxRuntime::GfxDriver {
 	std::string name;
 	std::vector<GfxMode*> modes;
 	D3DDEVICEDESC7 d3d_desc;
+	HMONITOR hMonitor;
+	std::string device_name;
+};
+
+struct gxRuntime::MonitorInfo {
+	HMONITOR hMonitor;
+	RECT rect;
+	bool primary;
+	std::string device_name;
 };
 
 static const int static_ws = WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -123,6 +132,7 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 	FreeImage_Initialise(true);
 
 	enumGfx();
+	enumMonitors();
 	TIMECAPS tc;
 	timeGetDevCaps(&tc, sizeof(tc));
 	timeBeginPeriod(tc.wPeriodMin);
@@ -166,6 +176,7 @@ gxRuntime::~gxRuntime() {
 	timeGetDevCaps(&tc, sizeof(tc));
 	timeEndPeriod(tc.wPeriodMin);
 	denumGfx();
+	denumMonitors();
 	DestroyWindow(hwnd);
 	UnregisterClass("Blitz Runtime Class", hinst);
 
@@ -401,6 +412,9 @@ LRESULT gxRuntime::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 					if(!suspended) suspend();
 				}
 			}
+			break;
+		case WM_DISPLAYCHANGE:
+			enumMonitors();
 			break;
 	}
 
@@ -1092,6 +1106,8 @@ static BOOL WINAPI enumDriver(GUID FAR* guid, LPSTR desc, LPSTR name, LPVOID con
 
 	d->guid = guid ? new GUID(*guid) : 0;
 	d->name = desc;
+	d->hMonitor = hm;
+	d->device_name = name ? name : "";
 
 	memset(&d->d3d_desc, 0, sizeof(d->d3d_desc));
 	IDirect3D7* dir3d;
@@ -1125,6 +1141,31 @@ void gxRuntime::denumGfx() {
 		delete d;
 	}
 	drivers.clear();
+}
+
+static BOOL CALLBACK enumMonitorProc(HMONITOR hm, HDC hdc, LPRECT rect, LPARAM lparam) {
+	MONITORINFOEX mi; mi.cbSize = sizeof(mi);
+	if (!GetMonitorInfo(hm, &mi)) return TRUE;
+
+	gxRuntime::MonitorInfo* m = new gxRuntime::MonitorInfo;
+	m->hMonitor = hm;
+	m->rect = mi.rcMonitor;
+	m->primary = (mi.dwFlags & MONITORINFOF_PRIMARY) ? true : false;
+	m->device_name = mi.szDevice;
+
+	std::vector<gxRuntime::MonitorInfo*>* monitors = (std::vector<gxRuntime::MonitorInfo*>*)lparam;
+	monitors->push_back(m);
+	return TRUE;
+}
+
+void gxRuntime::enumMonitors() {
+	denumMonitors();
+	EnumDisplayMonitors(0, 0, enumMonitorProc, (LPARAM)&monitors);
+}
+
+void gxRuntime::denumMonitors() {
+	for (int k = 0; k < monitors.size(); ++k) delete monitors[k];
+	monitors.clear();
 }
 
 int gxRuntime::numGraphicsDrivers() {
@@ -1174,6 +1215,71 @@ void gxRuntime::windowedModeInfo(int* c) {
 	}
 	if(drivers[0]->d3d_desc.dwDeviceRenderBitDepth & bd) caps |= GFXMODECAPS_3D;
 	*c = caps;
+}
+
+int gxRuntime::numMonitors() {
+	return monitors.size();
+}
+
+void gxRuntime::monitorInfo(int monitor, int* x, int* y, int* w, int* h, int* primary, std::string* name) {
+	MonitorInfo* m = monitors[monitor];
+	*x = m->rect.left;
+	*y = m->rect.top;
+	*w = m->rect.right - m->rect.left;
+	*h = m->rect.bottom - m->rect.top;
+	*primary = m->primary ? 1 : 0;
+	*name = m->device_name;
+}
+
+int gxRuntime::currentMonitor() {
+	HMONITOR hm = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+	for (int k = 0; k < monitors.size(); ++k) {
+		if (monitors[k]->hMonitor == hm) return k;
+	}
+	return -1;
+}
+
+int gxRuntime::findDriverForMonitor(int monitor) {
+	if (monitor < 0 || monitor >= monitors.size()) return -1;
+	if (!enum_all) { enum_all = true; enumGfx(); }
+
+	HMONITOR hm = monitors[monitor]->hMonitor;
+	for (int k = 0; k < drivers.size(); ++k) {
+		if (drivers[k]->hMonitor == hm) return k;
+	}
+	return -1;
+}
+
+bool gxRuntime::moveWindowToMonitor(int monitor) {
+	if (monitor < 0 || monitor >= monitors.size()) return false;
+	if (gfx_mode == GMODE_NONE || gfx_mode == GMODE_EXCLUSIVE) return false;
+
+	const MonitorInfo& mi = *monitors[monitor];
+
+	RECT w_r, c_r;
+	GetWindowRect(hwnd, &w_r);
+	GetClientRect(hwnd, &c_r);
+	int ww = c_r.right - c_r.left;
+	int hh = c_r.bottom - c_r.top;
+	int tw = (w_r.right - w_r.left) - ww;
+	int th = (w_r.bottom - w_r.top) - hh;
+
+	int mon_w = mi.rect.right - mi.rect.left;
+	int mon_h = mi.rect.bottom - mi.rect.top;
+	int cx = mi.rect.left + (mon_w - ww) / 2;
+	int cy = mi.rect.top + (mon_h - hh) / 2;
+
+	POINT zz = { 0,0 };
+	ClientToScreen(hwnd, &zz);
+	int bw = zz.x - w_r.left, bh = zz.y - w_r.top;
+	int wx = cx - bw, wy = cy - bh;
+	if (wy < mi.rect.top) wy = mi.rect.top;
+
+	return MoveWindow(hwnd, wx, wy, ww + tw, hh + th, true);
+}
+
+int gxRuntime::displayMode() {
+	return gfx_mode;
 }
 
 gxTimer* gxRuntime::createTimer(int hertz) {
