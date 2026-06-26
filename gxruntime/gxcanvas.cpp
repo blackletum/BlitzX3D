@@ -183,7 +183,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture8* t, int f) :
     setFont(graphics->getDefaultFont());
     setViewport(0, 0, getWidth(), getHeight());
 
-    if (flags & gxCanvas::CANVAS_TEX_MIPMAP) ddUtil::buildMipMaps(tex);
+    // if (flags & gxCanvas::CANVAS_TEX_MIPMAP) ddUtil::buildMipMaps(tex);
 }
 
 gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* ct, int f) :
@@ -293,9 +293,6 @@ IDirect3DBaseTexture8* gxCanvas::getTexture() const {
 }
 
 IDirect3DBaseTexture8* gxCanvas::getTexSurface() const {
-    if (mod_cnt != remip_cnt && tex && (flags & CANVAS_TEX_MIPMAP))
-        ddUtil::buildMipMaps(tex);
-    remip_cnt = mod_cnt;
     return getTexture();
 }
 

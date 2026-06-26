@@ -185,9 +185,12 @@ IDirect3DSurface8* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
     return surf;
 }
 
-IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
-    IDirect3DDevice8* dev = gfx->dir3dDev;
-    adjustTexSize(&w, &h, dev);
+IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx)
+{
+    if (!gfx || !gfx->dir3dDev) return nullptr;
+
+    int adjW = w, adjH = h;
+    adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
 
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
@@ -198,8 +201,14 @@ IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
     UINT mipLevels = hasMips ? 0 : 1;
+    DWORD usage = 0;
+
     IDirect3DTexture8* tex = nullptr;
-    dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, D3DPOOL_MANAGED, &tex);
+    if (FAILED(hr) && hasMips) {
+        hr = gfx->dir3dDev->CreateTexture(adjW, adjH, 1, 0, fmt, D3DPOOL_MANAGED, &tex);
+    }
+
     return tex;
 }
 
@@ -343,11 +352,15 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
     UINT mipLevels = hasMips ? 0 : 1;
+    DWORD usage = 0;
 
     IDirect3DTexture8* tex = nullptr;
-    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
-    if (FAILED(hr)) {
-        g_lastImageError = "CreateTexture failed: " + file;
+    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, D3DPOOL_MANAGED, &tex);
+    if (FAILED(hr) && hasMips) {
+        hr = gfx->dir3dDev->CreateTexture(adjW, adjH, 1, 0, fmt, D3DPOOL_MANAGED, &tex);
+    }
+
+    if (!tex) {
         FreeImage_Unload(fib32);
         return nullptr;
     }
@@ -403,6 +416,6 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
     tex->UnlockRect(0);
     FreeImage_Unload(fib32);
 
-    if (hasMips) buildMipMaps(tex);
+    // if (hasMips) buildMipMaps(tex);
     return tex;
 }
