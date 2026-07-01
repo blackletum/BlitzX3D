@@ -121,6 +121,7 @@ public:
 	void adoptCanvas(gxCanvas* c);
 
 	gxMesh* createMesh(int max_verts, int max_tris, int flags);
+	gxMesh* createSkinnedMesh(int max_verts, int max_tris);
 	gxMesh* verifyMesh(gxMesh* mesh);
 	void freeMesh(gxMesh* mesh);
 };

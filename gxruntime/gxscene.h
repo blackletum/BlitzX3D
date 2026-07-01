@@ -117,6 +117,10 @@ public:
 	//info
 	int getTrianglesDrawn()const;
 
+	// skinned
+	bool hwVertexBlend() const { return hw_vertex_blend; }
+	void renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const D3DMATRIX* bone_matrices, int bone_cnt);
+
 	DWORD textureLodBias;
 	int textureAnisotropic;
 
@@ -125,6 +129,7 @@ private:
 	bool wbuffer, dither, antialias, wireframe, flipped;
 	unsigned ambient, ambient2, fogcolor;
 	int caps_level, fogmode, zmode, max_lights;
+	bool hw_vertex_blend;
 	float fogrange_nr, fogrange_fr, fog_density;
 	D3DVIEWPORT9 viewport;
 	bool ortho_proj;

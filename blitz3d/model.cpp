@@ -14,11 +14,22 @@ class Model::MeshQueue {
 
 	static MeshQueue* pool;
 
+	bool skinned;
+	int boneCnt;
+	D3DMATRIX boneMatrices[256];
 public:
 	MeshQueue() {}
 
-	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b) :
-		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b) {
+	// non skinned
+	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b) : mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), skinned(false), boneCnt(0) {
+		int n = brush.getBlend();
+		q_type = (n == gxScene::BLEND_REPLACE) ? QUEUE_OPAQUE : QUEUE_TRANSPARENT;
+	}
+	
+	// skinned
+	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, const D3DMATRIX* matrices, int cnt) : mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), skinned(true), boneCnt(cnt) {
+		if (cnt > 256) cnt = 256;
+		memcpy(boneMatrices, matrices, cnt * sizeof(D3DMATRIX));
 		int n = brush.getBlend();
 		q_type = (n == gxScene::BLEND_REPLACE) ? QUEUE_OPAQUE : QUEUE_TRANSPARENT;
 	}
@@ -26,6 +37,8 @@ public:
 	int getQueueType()const {
 		return q_type;
 	}
+	bool isSkinned() const { return skinned; }
+
 	void render() {
 		gx_scene->setRenderState(brush.getRenderState());
 		gx_scene->render(mesh, fv, vc, ft, tc);
@@ -118,10 +131,23 @@ void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& b
 	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush));
 }
 
+void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& brush, const D3DMATRIX* boneMatrices, int boneCnt) {
+	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, boneMatrices, boneCnt));
+}
+
 void Model::renderQueue(int type) {
 	std::vector<MeshQueue*>* que = &queues[type];
 	for(; que->size(); que->pop_back()) {
 		MeshQueue* q = que->back();
+		if (q->isSkinned()) {
+			gx_scene->setWorldMatrix(0);
+		}
+		else {
+			if (space == RENDER_SPACE_LOCAL)
+				gx_scene->setWorldMatrix((gxScene::Matrix*)&getRenderTform());
+			else
+				gx_scene->setWorldMatrix(0);
+		}
 		q->render();
 		delete q;
 	}

@@ -62,6 +62,7 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	hw_tex_stages = 1;
 	caps_level = 100;
 	max_lights = 8;
+	hw_vertex_blend = false;
 
 	D3DCAPS9 caps8;
 	if (SUCCEEDED(dir3dDev->GetDeviceCaps(&caps8))) {
@@ -70,6 +71,9 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 		//texture stages
 		hw_tex_stages = caps8.MaxSimultaneousTextures;
 		max_lights = caps8.MaxActiveLights;
+
+		// vertex blending to skip cpu blend
+		hw_vertex_blend = (caps8.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) && (caps8.VertexProcessingCaps & D3DVTXPCAPS_TWEENING) && caps8.MaxVertexBlendMatrixIndex >= (gxMesh::MAX_BLEND_BONES - 1);
 
 		//depth format must be 16-bit for safe Wbuffer use
 		if ((rasterCaps & D3DPRASTERCAPS_WBUFFER) && graphics->zbuffFmt == D3DFMT_D16)
@@ -748,4 +752,10 @@ void gxScene::freeLight(gxLight* l) {
 
 int gxScene::getTrianglesDrawn()const {
 	return tris_drawn;
+}
+
+void gxScene::renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt,
+	const D3DMATRIX* bone_matrices, int bone_cnt) {
+	mesh->renderSkinned(first_vert, vert_cnt, first_tri, tri_cnt, bone_matrices, bone_cnt);
+	tris_drawn += tri_cnt;
 }

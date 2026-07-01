@@ -423,18 +423,31 @@ void gxGraphics::adoptCanvas(gxCanvas* c) {
 }
 
 gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
-	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
-		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 	DWORD usage = D3DUSAGE_WRITEONLY;
 	IDirect3DVertexBuffer9* vb = nullptr;
-	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
+	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, gxMesh::VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
 		return nullptr;
 	IDirect3DIndexBuffer9* ib = nullptr;
 	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, nullptr))) {
 		vb->Release();
 		return nullptr;
 	}
-	gxMesh* mesh = new gxMesh(this, vb, ib, max_verts, max_tris);
+	gxMesh* mesh = new gxMesh(this, vb, ib, max_verts, max_tris, false);
+	mesh_set.insert(mesh);
+	return mesh;
+}
+
+gxMesh* gxGraphics::createSkinnedMesh(int max_verts, int max_tris) {
+	DWORD usage = D3DUSAGE_WRITEONLY;
+	IDirect3DVertexBuffer9* vb = nullptr;
+	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxSkinVertex), usage, gxMesh::SKIN_VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
+		return nullptr;
+	IDirect3DIndexBuffer9* ib = nullptr;
+	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, nullptr))) {
+		vb->Release();
+		return nullptr;
+	}
+	gxMesh* mesh = new gxMesh(this, vb, ib, max_verts, max_tris, true);
 	mesh_set.insert(mesh);
 	return mesh;
 }
