@@ -229,44 +229,17 @@ bool MeshModel::render(const RenderContext& rc) {
 
 	//OK, its boned!
 	const std::vector<Object*>& bones = getAnimator()->getObjects();
-	int boneCnt = (int)bones.size();
 
-	for (int k = 0; k < boneCnt; ++k) {
-		Transform t = bones[k]->getRenderTform() * rep->bone_tforms[k];
+	int k;
+	for(k = 0; k < bones.size(); ++k) {
+		Transform t =
+			bones[k]->getRenderTform() * rep->bone_tforms[k];
 		surf_bones[k].coord_tform = t;
 		surf_bones[k].normal_tform = t.m.cofactor();
 	}
 
-	extern gxScene* gx_scene;
-	if (gx_scene && gx_scene->hwVertexBlend()) {
-		D3DMATRIX* boneMatrices = (D3DMATRIX*)_alloca(boneCnt * sizeof(D3DMATRIX));
-		for (int i = 0; i < boneCnt; ++i) {
-			const Transform& t = surf_bones[i].coord_tform;
-			boneMatrices[i]._11 = t.m.i.x; boneMatrices[i]._12 = t.m.i.y; boneMatrices[i]._13 = t.m.i.z; boneMatrices[i]._14 = 0;
-			boneMatrices[i]._21 = t.m.j.x; boneMatrices[i]._22 = t.m.j.y; boneMatrices[i]._23 = t.m.j.z; boneMatrices[i]._24 = 0;
-			boneMatrices[i]._31 = t.m.k.x; boneMatrices[i]._32 = t.m.k.y; boneMatrices[i]._33 = t.m.k.z; boneMatrices[i]._34 = 0;
-			boneMatrices[i]._41 = t.v.x;   boneMatrices[i]._42 = t.v.y;   boneMatrices[i]._43 = t.v.z;   boneMatrices[i]._44 = 1;
-		}
-
-		bool trans = false;
-		for (int k = 0; k < rep->surfaces.size(); ++k) {
-			Surface* s = rep->surfaces[k];
-			gxMesh* skinnedMesh = s->getSkinnedMesh();
-			if (skinnedMesh) {
-				if (brushes[k].getBlend() == gxScene::BLEND_REPLACE) {
-					enqueue(skinnedMesh, 0, s->numVertices(), 0, s->numTriangles(),
-						brushes[k], boneMatrices, boneCnt);
-				}
-				else {
-					trans = true;
-				}
-			}
-		}
-		return trans;   // transparent surfaces will be rendered later
-	}
-
 	bool trans = false;
-	for (int k = 0; k < rep->surfaces.size(); ++k) {
+	for(k = 0; k < rep->surfaces.size(); ++k) {
 		Surface* s = rep->surfaces[k];
 		if(brushes[k].getBlend() == gxScene::BLEND_REPLACE) {
 			if(gxMesh* mesh = s->getMesh(surf_bones)) {

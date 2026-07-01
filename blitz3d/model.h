@@ -68,7 +68,6 @@ public:
 
 	void enqueue(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt);
 	void enqueue(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const Brush& b);
-	void enqueue(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const Brush& brush, const D3DMATRIX* boneMatrices, int boneCnt);
 
 	int queueSize(int type)const { return queues[type].size(); }
 

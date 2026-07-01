@@ -100,7 +100,7 @@ public:
 	int numTriangles()const { return triangles.size(); }
 	const Vertex& getVertex(int n)const { return vertices[n]; }
 	const Triangle& getTriangle(int n)const { return triangles[n]; }
-	gxMesh* getSkinnedMesh();
+
 private:
 	Brush brush;
 	std::string name;
@@ -110,9 +110,6 @@ private:
 	int mesh_vs, mesh_ts;
 	int valid_vs, valid_ts;
 	Monitor* mon;
-	gxMesh* skinned_mesh = nullptr;
-	int skinned_valid_vs = 0, skinned_valid_ts = 0;
-	void invalidateSkinned();
 };
 
 #endif
