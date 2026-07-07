@@ -443,9 +443,16 @@ Tile* Codegen_x86::munchReg(TNode* t) {
 			r = munch(t->r);
 			q = new Tile("", l, r);
 			break;
-		case IR_ARG:
-			q = new Tile("\tlea\t%l,[esp" + itoa_sgn(t->iconst) + "]\n");
-			break;
+		case IR_ARG: {
+			static const char* argRegs[] = { "rcx","rdx","r8","r9" };
+			if (t->iconst < 32) {
+				q = new Tile("\tmov\t%l," + std::string(argRegs[t->iconst / 4]) + "\n");
+			}
+			else {
+				q = new Tile("\tlea\t%l,[rsp" + itoa_sgn(t->iconst) + "]\n");
+			}
+		}
+		break;
 		case IR_LOCAL:
 			q = new Tile("\tlea\t%l,[ebp" + itoa_sgn(t->iconst) + "]\n");
 			break;

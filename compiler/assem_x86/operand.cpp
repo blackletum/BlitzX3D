@@ -5,10 +5,25 @@
 #include "../../MultiLang/MultiLang.h"
 
 static const char* regs[] = {
+	// 8-bit
 	"al","cl","dl","bl","ah","ch","dh","bh",
+	// 8-bit extended
+	"spl","bpl","sil","dil","r8b","r9b","r10b","r11b","r12b","r13b","r14b","r15b",
+	// 16-bit
 	"ax","cx","dx","bx","sp","bp","si","di",
-	"eax","ecx","edx","ebx","esp","ebp","esi","edi"
+	// 16-bit extended
+	"r8w","r9w","r10w","r11w","r12w","r13w","r14w","r15w",
+	// 32-bit
+	"eax","ecx","edx","ebx","esp","ebp","esi","edi",
+	// 32-bit extended
+	"r8d","r9d","r10d","r11d","r12d","r13d","r14d","r15d",
+	// 64-bit
+	"rax","rcx","rdx","rbx","rsp","rbp","rsi","rdi",
+	// 64-bit extended
+	"r8","r9","r10","r11","r12","r13","r14","r15"
 };
+
+static const int REG_COUNT = sizeof(regs) / sizeof(regs[0]);
 
 static void opError() {
 	throw Ex(MultiLang::error_in_operand);
@@ -53,8 +68,13 @@ bool Operand::parseReg(int* reg) {
 	for(i = 0; i < s.size() && isalpha(s[i]); ++i) {}
 	if(!i) return false;
 	std::string t = s.substr(0, i);
-	for(int j = 0; j < 24; ++j) {
-		if(t == regs[j]) { *reg = j; s = s.substr(i); return true; }
+
+	for (int j = 0; j < REG_COUNT; ++j) {
+		if (t == regs[j]) {
+			*reg = j;
+			s = s.substr(i);
+			return true;
+		}
 	}
 	return false;
 }
@@ -93,21 +113,33 @@ void Operand::parse() {
 		int r;
 		if(parseReg(&r)) {
 			mode = REG | R_M;
-			if(r < 8) {
-				if(sz && sz != 1) sizeError();
+			// 8
+			if (r < 20) {
+				if (sz && sz != 1) sizeError();
 				mode |= REG8 | R_M8;
-				if(r == 0) mode |= AL; else if(r == 1) mode |= CL;
+				if (r == 0) mode |= AL;
+				else if (r == 1) mode |= CL;
 			}
-			else if(r < 16) {
-				if(sz && sz != 2) sizeError();
+			// 16
+			else if (r < 36) {
+				if (sz && sz != 2) sizeError();
 				mode |= REG16 | R_M16;
-				if(r == 8) mode |= AX; else if(r == 9) mode |= CX;
+				if (r == 20) mode |= AX;
+				else if (r == 21) mode |= CX;
 			}
-			else {
-				if(sz && sz != 4) sizeError();
+			// 32
+			else if (r < 52) {
+				if (sz && sz != 4) sizeError();
 				mode |= REG32 | R_M32;
-				if(r == 16) mode |= EAX; else if(r == 17) mode |= ECX;
+				if (r == 36) mode |= EAX;
+				else if (r == 37) mode |= ECX;
 			}
+			// 64
+			else {
+				if (sz && sz != 8) sizeError();
+				mode |= REG64 | R_M64;
+			}
+			raw_reg = r;
 			reg = r & 7;
 		}
 		else if(parseFPReg(&r)) {

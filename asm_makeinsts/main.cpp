@@ -100,6 +100,7 @@ void main(){
 			else if( byte=="/7" ) flags+="|_7";
 			else if( byte=="o16" ) flags+="|O16";
 			else if( byte=="o32" ) flags+="|O32";
+			else if (byte == "o64") flags += "|O64";
 			else if( byte=="ow/od" ) flags+="|OW_OD";
 			else if( byte=="ib" ) flags+="|IB";
 			else if( byte=="iw" ) flags+="|IW";

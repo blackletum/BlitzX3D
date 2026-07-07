@@ -7,7 +7,8 @@
 struct Operand {
 
 	int mode;
-	int reg, imm, offset;
+	int reg, raw_reg;
+	int imm, offset;
 	std::string immLabel, baseLabel;
 	int baseReg, indexReg, shift;
 
