@@ -1177,14 +1177,11 @@ bbImage* bbCopyImage(bbImage* i)
     return t;
 }
 
-bbImage* bbCreateImage(int w, int h, int n)
-{
+bbImage* bbCreateImage(int w, int h, int n, int flags) {
     std::vector<gxCanvas*> frames;
-    for (int k = 0; k < n; ++k)
-    {
-        gxCanvas* c = gx_graphics->createCanvas(w, h, 0);
-        if (!c)
-        {
+    for (int k = 0; k < n; ++k) {
+        gxCanvas* c = gx_graphics->createCanvas(w, h, flags);
+        if (!c) {
             for (--k; k >= 0; --k) gx_graphics->freeCanvas(frames[k]);
             return 0;
         }
@@ -1411,6 +1408,30 @@ int bbImageWidthUnscaled(bbImage* i) {
 int bbImageHeightUnscaled(bbImage* i) {
     debugImage(i, "ImageHeightUnscaled");
     return i->origHeight;
+}
+
+int bbBufferWidth(gxCanvas* buffer) {
+    debugCanvas(buffer, "BufferWidth");
+    return buffer->getWidth();
+}
+
+int bbBufferHeight(gxCanvas* buffer) {
+    debugCanvas(buffer, "BufferHeight");
+    return buffer->getHeight();
+}
+
+void bbDrawBufferRect(gxCanvas* src, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh) {
+    debugCanvas(src, "DrawBufferRect");
+    if (!gx_canvas) {
+        ErrorLog("DrawBufferRect", "No current buffer");
+        return;
+    }
+    if (dw == sw && dh == sh) {
+        gx_canvas->blit(dx, dy, src, sx, sy, sw, sh, true);
+    }
+    else {
+        gx_canvas->blitstretch(dx, dy, dw, dh, src, sx, sy, sw, sh, true);
+    }
 }
 
 void bbTFormImage(bbImage* i, float a, float b, float c, float d)
@@ -1842,7 +1863,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%LoadAnimImage$bmpfile%cellwidth%cellheight%first%count", bbLoadAnimImage);
     rtSym("%LoadAnimTextureGrid$file%flags%columns%rows%first%count", bbLoadAnimTextureGrid);
     rtSym("%CopyImage%image", bbCopyImage);
-    rtSym("%CreateImage%width%height%frames=1", bbCreateImage);
+    rtSym("%CreateImage%width%height%frames%flags", bbCreateImage);
     rtSym("FreeImage%image", bbFreeImage);
     rtSym("%SaveImage%image$bmpfile%frame=0", bbSaveImage);
     rtSym("%ImageWidthUnscaled%image", bbImageWidthUnscaled);
@@ -1864,6 +1885,9 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%ImageHeight%image", bbImageHeight);
     rtSym("%ImageXHandle%image", bbImageXHandle);
     rtSym("%ImageYHandle%image", bbImageYHandle);
+    rtSym("%BufferWidth%buffer", bbBufferWidth);
+    rtSym("%BufferHeight%buffer", bbBufferHeight);
+    rtSym("DrawBufferRect%buffer%dest_x%dest_y%dest_w%dest_h%src_x%src_y%src_w%src_h", bbDrawBufferRect);
 
     rtSym("ScaleImage%image#xscale#yscale", bbScaleImage);
     rtSym("ResizeImage%image#width#height", bbResizeImage);

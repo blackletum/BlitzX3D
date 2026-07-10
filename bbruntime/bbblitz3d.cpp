@@ -344,6 +344,58 @@ void bbRenderWorld(float tween) {
 #endif
 }
 
+static void collectEntities(Entity* e, std::vector<Entity*>& out) {
+	out.push_back(e);
+	for (Entity* child = e->children(); child; child = child->successor())
+		collectEntities(child, out);
+}
+
+static void setVisibleRecursive(Entity* e, bool vis) {
+	e->setVisible(vis);
+	for (Entity* child = e->children(); child; child = child->successor())
+		setVisibleRecursive(child, vis);
+}
+
+void bbRenderEntity(Entity* e, Camera* cam, float tween) {
+	if (!gx_scene) {
+		ErrorLog("RenderEntity", MultiLang::graphics_not_set);
+		return;
+	}
+	if (!e || !cam) {
+		ErrorLog("RenderEntity", MultiLang::null_obj_ex);
+		return;
+	}
+	if (!cam->getCamera()) {
+		ErrorLog("RenderEntity", MultiLang::entity_not_camera);
+		return;
+	}
+
+	if (!cam->beginRenderFrame()) return;
+
+	std::vector<Entity*> allEntities;
+	for (Entity* root = Entity::orphans(); root; root = root->successor()) {
+		collectEntities(root, allEntities);
+	}
+
+	std::vector<bool> visibility(allEntities.size());
+	for (size_t i = 0; i < allEntities.size(); ++i) {
+		visibility[i] = allEntities[i]->visible();
+		allEntities[i]->setVisible(false);
+	}
+
+	setVisibleRecursive(e, true);
+
+	extern World* world;
+	if (world) {
+		world->capture();
+		world->render(tween);
+	}
+
+	for (size_t i = 0; i < allEntities.size(); ++i) {
+		allEntities[i]->setVisible(visibility[i]);
+	}
+}
+
 int bbTrisRendered() {
 	return tri_count;
 }
@@ -2179,6 +2231,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("CaptureWorld", bbCaptureWorld);
 	rtSym("RenderWorld#tween=1", bbRenderWorld);
 	rtSym("ClearWorld%entities=1%brushes=1%textures=1", bbClearWorld);
+	rtSym("RenderEntity%entity%camera#tween=1", bbRenderEntity);
 	rtSym("%ActiveTextures", bbActiveTextures);
 	rtSym("%TrisRendered", bbTrisRendered);
 	rtSym("#Stats3D%type", bbStats3D);

@@ -88,7 +88,7 @@ int		 bbStringHeight(BBStr* str);
 //image functions
 bbImage* bbLoadImage(BBStr* s, int flags);
 bbImage* bbCopyImage(bbImage* i);
-bbImage* bbCreateImage(int w, int h, int n);
+bbImage* bbCreateImage(int w, int h, int n, int flags);
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt);
 bbImage* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int count);
 void	 bbFreeImage(bbImage* i);
@@ -121,6 +121,9 @@ int		 bbImageRectOverlap(bbImage* i, int x, int y, int r_x, int r_y, int r_w, in
 int		 bbImageRectCollide(bbImage* i, int x, int y, int f, int r_x, int r_y, int r_w, int r_h);
 int bbImageWidthUnscaled(bbImage* i);
 int bbImageHeightUnscaled(bbImage* i);
+int bbBufferWidth(gxCanvas* buffer);
+int bbBufferHeight(gxCanvas* buffer);
+void bbDrawBufferRect(gxCanvas* src, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh);
 
 //effects
 BBStr* bbGetEffectError();
