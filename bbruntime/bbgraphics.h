@@ -86,10 +86,11 @@ int		 bbStringWidth(BBStr* str);
 int		 bbStringHeight(BBStr* str);
 
 //image functions
-bbImage* bbLoadImage(BBStr* s);
+bbImage* bbLoadImage(BBStr* s, int flags);
 bbImage* bbCopyImage(bbImage* i);
 bbImage* bbCreateImage(int w, int h, int n);
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt);
+bbImage* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int count);
 void	 bbFreeImage(bbImage* i);
 int		 bbSaveImage(bbImage* i, BBStr* filename, int frame);
 void	 bbGrabImage(bbImage* i, int x, int y, int n);
@@ -118,6 +119,11 @@ int		 bbImagesCollide(bbImage* i1, int x1, int y1, int f1, bbImage* i2, int x2, 
 int		 bbRectsOverlap(int x1, int y1, int w1, int h1, int x2, int y2, int w2, int h2);
 int		 bbImageRectOverlap(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h);
 int		 bbImageRectCollide(bbImage* i, int x, int y, int f, int r_x, int r_y, int r_w, int r_h);
+int bbImageWidthUnscaled(bbImage* i);
+int bbImageHeightUnscaled(bbImage* i);
+
+//effects
+BBStr* bbGetEffectError();
 
 //simple print functions
 void	 bbWrite(BBStr* str);

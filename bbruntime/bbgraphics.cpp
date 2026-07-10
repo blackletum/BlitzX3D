@@ -16,8 +16,16 @@ struct GfxMode
 class bbImage
 {
 public:
-    bbImage(const std::vector<gxCanvas*>& f) :frames(f)
-    {
+    int origWidth, origHeight;
+    bbImage(const std::vector<gxCanvas*>& f, int origW = -1, int origH = -1) : frames(f) {
+        if (origW == -1) {
+            origWidth = frames[0]->getWidth();
+            origHeight = frames[0]->getHeight();
+        }
+        else {
+            origWidth = origW;
+            origHeight = origH;
+        }
         savePixels();
     }
     ~bbImage()
@@ -991,8 +999,7 @@ void bbCloseMovie(gxMovie* movie)
     gx_graphics->closeMovie(movie);
 }
 
-bbImage* bbLoadImage(BBStr* s)
-{
+bbImage* bbLoadImage(BBStr* s, int flags) {
     std::string path = *s;
     if (g_texturePathMutator) {
         BBStr* newPath = g_texturePathMutator(s);
@@ -1002,7 +1009,7 @@ bbImage* bbLoadImage(BBStr* s)
         }
     }
     delete s;
-    gxCanvas* c = gx_graphics->loadCanvas(path, 0);
+    gxCanvas* c = gx_graphics->loadCanvas(path, flags);
     if (!c) {
         std::string errMsg = "Failed to load image: " + path;
         const std::string& libErr = ddUtil::getLastImageError();
@@ -1064,6 +1071,76 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
         src_x += w;
         if (src_x + w > pic->getWidth()) { src_x = 0; src_y += h; }
     }
+    gx_graphics->freeCanvas(pic);
+
+    bbImage* image = new bbImage(frames);
+    image_set.insert(image);
+    return image;
+}
+
+bbImage* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int cnt) {
+    std::string f = *file;
+    delete file;
+
+    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(f, flags, gx_graphics, false);
+    if (!picTex) return 0;
+
+    gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE);
+    gx_graphics->adoptCanvas(pic);
+
+    int texW = pic->getWidth();
+    int texH = pic->getHeight();
+
+    if (columns <= 0 || rows <= 0) {
+        gx_graphics->freeCanvas(pic);
+        ErrorLog("LoadAnimTextureGrid", "Columns and rows must be positive.");
+        return 0;
+    }
+    int frameW = texW / columns;
+    int frameH = texH / rows;
+    if (frameW <= 0 || frameH <= 0) {
+        gx_graphics->freeCanvas(pic);
+        ErrorLog("LoadAnimTextureGrid", "Invalid grid dimensions.");
+        return 0;
+    }
+    int totalFrames = columns * rows;
+    if (first < 0 || cnt <= 0 || first + cnt > totalFrames) {
+        gx_graphics->freeCanvas(pic);
+        ErrorLog("LoadAnimTextureGrid", "Frame range out of bounds.");
+        return 0;
+    }
+
+    int fpr = columns;
+    int src_x = (first % fpr) * frameW;
+    int src_y = (first / fpr) * frameH;
+
+    std::vector<gxCanvas*> frames;
+    for (int k = 0; k < cnt; ++k) {
+        IDirect3DTexture9* tex = ddUtil::createTextureSurface(frameW, frameH, flags, gx_graphics, false);
+        if (!tex) {
+            for (int i = 0; i < k; ++i) gx_graphics->freeCanvas(frames[i]);
+            gx_graphics->freeCanvas(pic);
+            return 0;
+        }
+        gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE);
+        gx_graphics->adoptCanvas(c);
+
+        c->setLogicalSize(frameW, frameH);
+        c->blit(0, 0, pic, src_x, src_y, frameW, frameH, true);
+        c->backup();
+
+        extern bool auto_midhandle;
+        if (auto_midhandle) c->setHandle(frameW / 2, frameH / 2);
+
+        frames.push_back(c);
+
+        src_x += frameW;
+        if (src_x + frameW > texW) {
+            src_x = 0;
+            src_y += frameH;
+        }
+    }
+
     gx_graphics->freeCanvas(pic);
 
     bbImage* image = new bbImage(frames);
@@ -1326,6 +1403,16 @@ int bbImageRectCollide(bbImage* i, int x, int y, int f, int x2, int y2, int w2, 
     return c->rect_collide(x, y, x2, y2, w2, h2, false);
 }
 
+int bbImageWidthUnscaled(bbImage* i) {
+    debugImage(i, "ImageWidthUnscaled");
+    return i->origWidth;
+}
+
+int bbImageHeightUnscaled(bbImage* i) {
+    debugImage(i, "ImageHeightUnscaled");
+    return i->origHeight;
+}
+
 void bbTFormImage(bbImage* i, float a, float b, float c, float d)
 {
     debugImage(i, "TFormImage");
@@ -1383,6 +1470,13 @@ void bbRotateImage(bbImage* i, float d)
 void bbTFormFilter(int enable)
 {
     filter = enable ? true : false;
+}
+
+BBStr* bbGetEffectError() {
+    if (gx_graphics) {
+        return new BBStr(gx_graphics->getLastEffectError());
+    }
+    return new BBStr("");
 }
 
 static int p_ox, p_oy, p_hx, p_hy, p_vpx, p_vpy, p_vpw, p_vph;
@@ -1744,12 +1838,15 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%MoviePlaying%movie", bbMoviePlaying);
     rtSym("CloseMovie%movie", bbCloseMovie);
 
-    rtSym("%LoadImage$bmpfile", bbLoadImage);
+    rtSym("%LoadImage$bmpfile%flags=0", bbLoadImage);
     rtSym("%LoadAnimImage$bmpfile%cellwidth%cellheight%first%count", bbLoadAnimImage);
+    rtSym("%LoadAnimTextureGrid$file%flags%columns%rows%first%count", bbLoadAnimTextureGrid);
     rtSym("%CopyImage%image", bbCopyImage);
     rtSym("%CreateImage%width%height%frames=1", bbCreateImage);
     rtSym("FreeImage%image", bbFreeImage);
     rtSym("%SaveImage%image$bmpfile%frame=0", bbSaveImage);
+    rtSym("%ImageWidthUnscaled%image", bbImageWidthUnscaled);
+    rtSym("%ImageHeightUnscaled%image", bbImageHeightUnscaled);
 
     rtSym("GrabImage%image%x%y%frame=0", bbGrabImage);
     rtSym("%ImageBuffer%image%frame=0", bbImageBuffer);
@@ -1775,6 +1872,8 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("SetTFormMethod%method", bbSetTFormMethod);
     rtSym("TFormFilter%enable", bbTFormFilter);
     rtSym("SetTextureLoadPathMutator%mutator", bbSetTextureLoadPathMutator);
+
+    rtSym("$GetEffectError", bbGetEffectError);
 
     rtSym("%ImagesOverlap%image1%x1%y1%image2%x2%y2", bbImagesOverlap);
     rtSym("%ImagesCollide%image1%x1%y1%frame1%image2%x2%y2%frame2", bbImagesCollide);
