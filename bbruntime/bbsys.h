@@ -6,6 +6,7 @@
 
 extern bool debug;
 extern gxRuntime* gx_runtime;
+extern gxCanvas* gx_depth_canvas;
 extern const char* errorfunc;
 extern const char* errorlog;
 

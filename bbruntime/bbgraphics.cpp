@@ -502,10 +502,14 @@ int  bbAvailVidMem()
     return gx_graphics->getAvailVidmem();
 }
 
-void bbSetBuffer(gxCanvas* buff)
-{
+void bbSetBuffer(gxCanvas* buff) {
+    bbSetBufferDepth(buff, nullptr);
+}
+
+void bbSetBufferDepth(gxCanvas* buff, gxCanvas* depth) {
     debugCanvas(buff, "SetBuffer");
     gx_canvas = buff;
+    gx_depth_canvas = depth;
     curs_x = curs_y = 0;
     gx_canvas->setOrigin(0, 0);
     gx_canvas->setViewport(0, 0, gx_canvas->getWidth(), gx_canvas->getHeight());
@@ -1803,6 +1807,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
 
     //buffer management
     rtSym("SetBuffer%buffer", bbSetBuffer);
+    rtSym("SetBufferDepth%buffer%depth", bbSetBufferDepth);
     rtSym("%GraphicsBuffer", bbGraphicsBuffer);
     rtSym("%LoadBuffer%buffer$bmpfile", bbLoadBuffer);
     rtSym("%SaveBuffer%buffer$bmpfile", bbSaveBuffer);

@@ -673,6 +673,8 @@ void gxScene::setRenderState(const RenderState& rs) {
 	lastRenderStateValid = true;
 }
 
+extern gxCanvas* gx_depth_canvas;
+
 bool gxScene::begin(const std::vector<gxLight*>& lights) {
 
 	if(dir3dDev->BeginScene() != D3D_OK) return false;
@@ -702,9 +704,17 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	}
 	setLights();
 
-	if (target->z_surf) {
+	IDirect3DSurface9* depthSurf = nullptr;
+	if (gx_depth_canvas && gx_depth_canvas->z_surf) {
+		depthSurf = gx_depth_canvas->z_surf;
+	}
+	else if (target->z_surf) {
+		depthSurf = target->z_surf;
+	}
+
+	if (target->surf) {
 		dir3dDev->SetRenderTarget(0, target->surf);
-		dir3dDev->SetDepthStencilSurface(target->z_surf);
+		dir3dDev->SetDepthStencilSurface(depthSurf);
 	}
 
 	dir3dDev->SetViewport(&viewport);

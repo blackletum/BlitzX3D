@@ -44,6 +44,7 @@ void	 bbFlip(int vwait);
 
 //graphics buffer functions
 void	 bbSetBuffer(gxCanvas* buff);
+void bbSetBufferDepth(gxCanvas* buff, gxCanvas* depth);
 gxCanvas* bbGraphicsBuffer();
 int		 bbLoadBuffer(gxCanvas* surf, BBStr* str);
 int		 bbSaveBuffer(gxCanvas* surf, BBStr* str);
