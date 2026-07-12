@@ -92,7 +92,8 @@ gxGraphics::~gxGraphics() {
 gxEffect* gxGraphics::createEffect(const std::string& filename) {
 	ID3DXEffect* effect = nullptr;
 	ID3DXBuffer* errors = nullptr;
-	HRESULT hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
+	DWORD flags = D3DXSHADER_OPTIMIZATION_LEVEL3 | D3DXSHADER_PREFER_FLOW_CONTROL;
+	HRESULT hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, flags, nullptr, &effect, &errors);
 	if (FAILED(hr)) {
 		if (errors) {
 			lastEffectError = (const char*)errors->GetBufferPointer();
