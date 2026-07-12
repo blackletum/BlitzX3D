@@ -32,7 +32,7 @@ static int tri_count;
 static World* world;
 
 static std::unordered_set<Brush*> brush_set;
-static std::unordered_set<Texture*> texture_set;
+std::unordered_set<Texture*> texture_set;
 static std::unordered_set<Entity*> entity_set;
 
 static Listener* listener;
@@ -370,8 +370,6 @@ void bbRenderEntity(Entity* e, Camera* cam, float tween) {
 		return;
 	}
 
-	if (!cam->beginRenderFrame()) return;
-
 	std::vector<Entity*> allEntities;
 	for (Entity* root = Entity::orphans(); root; root = root->successor()) {
 		collectEntities(root, allEntities);
@@ -388,7 +386,7 @@ void bbRenderEntity(Entity* e, Camera* cam, float tween) {
 	extern World* world;
 	if (world) {
 		world->capture();
-		world->render(tween);
+		world->renderEntity(cam, tween);
 	}
 
 	for (size_t i = 0; i < allEntities.size(); ++i) {

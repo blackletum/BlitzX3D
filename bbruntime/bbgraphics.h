@@ -3,6 +3,7 @@
 
 #include "bbsys.h"
 #include "../gxruntime/gxgraphics.h"
+#include "../blitz3d/texture.h"
 
 extern gxGraphics* gx_graphics;
 extern gxCanvas* gx_canvas;
@@ -76,6 +77,7 @@ int		 bbColorBlue();
 
 BBStr* bbConvertToANSI(BBStr* str);
 BBStr* bbConvertToUTF8(BBStr* str);
+BBStr* bbGetTextureLoadError();
 
 //font functions
 gxFont* bbLoadFont(BBStr* name, int height, bool bold, bool italic, bool underlined);
@@ -91,7 +93,7 @@ bbImage* bbLoadImage(BBStr* s, int flags);
 bbImage* bbCopyImage(bbImage* i);
 bbImage* bbCreateImage(int w, int h, int n, int flags);
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt);
-bbImage* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int count);
+Texture* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int count);
 void	 bbFreeImage(bbImage* i);
 int		 bbSaveImage(bbImage* i, BBStr* filename, int frame);
 void	 bbGrabImage(bbImage* i, int x, int y, int n);
