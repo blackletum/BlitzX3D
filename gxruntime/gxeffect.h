@@ -21,6 +21,7 @@ public:
     bool setMatrix(const std::string& name, const D3DXMATRIX& mat);
     void setAutoMatrices(const D3DXMATRIX& world, const D3DXMATRIX& view, const D3DXMATRIX& proj);
     bool setTexture(const std::string& name, IDirect3DBaseTexture9* tex);
+    bool setTechnique(const std::string& name);
 
     bool begin(UINT* passes);
     bool beginPass(UINT pass);

@@ -66,6 +66,13 @@ bool gxEffect::setTexture(const std::string& name, IDirect3DBaseTexture9* tex) {
     return SUCCEEDED(hr);
 }
 
+bool gxEffect::setTechnique(const std::string& name) {
+    if (!effect) return false;
+    D3DXHANDLE h = effect->GetTechniqueByName(name.c_str());
+    if (!h) return false;
+    return SUCCEEDED(effect->SetTechnique(h));
+}
+
 bool gxEffect::begin(UINT* passes) {
     return SUCCEEDED(effect->Begin(passes, 0));
 }
