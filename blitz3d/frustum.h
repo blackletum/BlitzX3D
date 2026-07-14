@@ -16,6 +16,8 @@ public:
 	Frustum(float nr, float fr, float w, float h);
 	Frustum(const Frustum& f, const Transform& t);
 
+	static Frustum makeOrtho(float nr, float fr, float w, float h);
+
 	bool cull(const Box& box)const;
 	bool cull(const Vector vecs[], int cnt)const;
 

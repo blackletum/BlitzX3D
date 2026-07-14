@@ -2,9 +2,13 @@
 #define GXLIGHT_H
 
 #include <cstring>
+#include <string>
 #include <d3d9.h>
 
 class gxScene;
+class gxGraphics;
+class gxShadowMap;
+class gxEffect;
 
 class gxLight {
 public:
@@ -35,6 +39,30 @@ public:
 	void getColor(float rgb[3]) {
 		memcpy(rgb, &d3d_light.Diffuse, sizeof(float) * 3);
 	}
+
+	bool setRealtimeShadow(bool enable, gxGraphics* graphics);
+	bool hasRealtimeShadow()const;
+
+	void setShadowRange(float range) { shadow_range = range; }
+	float getShadowRange()const { return shadow_range; }
+
+	void setShadowResolution(int resolution) { shadow_resolution = resolution; }
+	int getShadowResolution()const { return shadow_resolution; }
+
+	gxShadowMap* getShadowMap()const { return shadow_map; }
+
+	gxEffect* getDepthEffect(gxGraphics* graphics);
+	gxEffect* getLitEffect(gxGraphics* graphics);
+
+private:
+	bool shadow_enabled;
+	float shadow_range;
+	int shadow_resolution;
+	gxShadowMap* shadow_map;
+	gxEffect* depth_effect;
+	gxEffect* lit_effect;
+
+	void freeShadowResources();
 };
 
 #endif

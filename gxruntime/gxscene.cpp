@@ -789,6 +789,13 @@ void gxScene::end() {
 	target->damage(r);
 }
 
+void gxScene::invalidateTransformCache() {
+	memset(&viewmatrix, 0x55, sizeof(viewmatrix));
+	memset(&worldmatrix, 0x55, sizeof(worldmatrix));
+	memset(&projmatrix, 0x55, sizeof(projmatrix));
+	frustum_nr = frustum_fr = frustum_w = frustum_h = -1.0f;
+}
+
 gxLight* gxScene::createLight(int flags) {
 	gxLight* l = new gxLight(this, flags);
 	_allLights.insert(l);

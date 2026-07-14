@@ -18,6 +18,29 @@ Frustum::Frustum(float nr, float fr, float w, float h) {
 	makePlanes();
 }
 
+Frustum Frustum::makeOrtho(float nr, float fr, float w, float h) {
+	Frustum f;
+	f.verts[VERT_TLNEAR] = Vector(w * -.5f, h * +.5f, nr);
+	f.verts[VERT_TRNEAR] = Vector(w * +.5f, h * +.5f, nr);
+	f.verts[VERT_BRNEAR] = Vector(w * +.5f, h * -.5f, nr);
+	f.verts[VERT_BLNEAR] = Vector(w * -.5f, h * -.5f, nr);
+	f.verts[VERT_TLFAR] = Vector(w * -.5f, h * +.5f, fr);
+	f.verts[VERT_TRFAR] = Vector(w * +.5f, h * +.5f, fr);
+	f.verts[VERT_BRFAR] = Vector(w * +.5f, h * -.5f, fr);
+	f.verts[VERT_BLFAR] = Vector(w * -.5f, h * -.5f, fr);
+	f.verts[VERT_EYE] = Vector(0, 0, nr);
+
+	f.planes[PLANE_TOP] = Plane(Vector(0, h * .5f, 0), Vector(0, -1, 0));
+	f.planes[PLANE_BOTTOM] = Plane(Vector(0, h * -.5f, 0), Vector(0, 1, 0));
+	f.planes[PLANE_LEFT] = Plane(Vector(w * -.5f, 0, 0), Vector(1, 0, 0));
+	f.planes[PLANE_RIGHT] = Plane(Vector(w * .5f, 0, 0), Vector(-1, 0, 0));
+	f.planes[PLANE_NEAR] = Plane(Vector(0, 0, nr), Vector(0, 0, 1));
+	f.planes[PLANE_FAR] = Plane(Vector(0, 0, fr), Vector(0, 0, -1));
+
+	return f;
+}
+
+
 Frustum::Frustum(const Frustum& f, const Transform& t) {
 	for (int k = 0; k < 9; ++k) {
 		verts[k] = t * f.verts[k];

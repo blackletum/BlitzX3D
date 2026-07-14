@@ -2,6 +2,7 @@
 #include "gxgraphics.h"
 #include "gxeffect.h"
 #include "gxruntime.h"
+#include "gxshadowmap.h"
 #include "../gxruntime/gxutf8.h"
 
 extern gxRuntime* gx_runtime;
@@ -288,6 +289,7 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	for (auto it = mesh_set.begin(); it != mesh_set.end(); ++it) {
 		(*it)->restore();
 	}
+	gxShadowMap::restoreAll();
 	for (auto font : font_set) {
 		for (auto atlas : font->atlases) atlas->restore();
 		if (font->tempCanvas) font->tempCanvas->restore();
