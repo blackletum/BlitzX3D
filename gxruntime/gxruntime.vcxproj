@@ -162,6 +162,7 @@
       <AssemblerOutput Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AssemblyAndSourceCode</AssemblerOutput>
     </ClCompile>
     <ClCompile Include="gxscene.cpp" />
+    <ClCompile Include="gxshadowmap.cpp" />
     <ClCompile Include="gxsound.cpp" />
     <ClCompile Include="gxtimer.cpp" />
     <ClCompile Include="gxutf8.cpp" />
@@ -190,6 +191,7 @@
     <ClInclude Include="gxmovie.h" />
     <ClInclude Include="gxruntime.h" />
     <ClInclude Include="gxscene.h" />
+    <ClInclude Include="gxshadowmap.h" />
     <ClInclude Include="gxsound.h" />
     <ClInclude Include="gxtimer.h" />
     <ClInclude Include="gxutf8.h" />
