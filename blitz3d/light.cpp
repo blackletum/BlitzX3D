@@ -1,8 +1,10 @@
 #include "std.h"
 #include "light.h"
 #include "../gxruntime/gxscene.h"
+#include "../gxruntime/gxgraphics.h"
 
 extern gxScene* gx_scene;
+extern gxGraphics* gx_graphics;
 
 Light::Light(int type) {
 	light = gx_scene->createLight(type);
@@ -29,4 +31,20 @@ bool Light::beginRender(float tween) {
 	light->setPosition(&getRenderTform().v.x);
 	light->setDirection(&getRenderTform().m.k.x);
 	return true;
+}
+
+bool Light::setRealtimeShadow(bool enable) {
+	return light->setRealtimeShadow(enable, gx_graphics);
+}
+
+bool Light::hasRealtimeShadow()const {
+	return light->hasRealtimeShadow();
+}
+
+void Light::setShadowRange(float range) {
+	light->setShadowRange(range);
+}
+
+void Light::setShadowResolution(int resolution) {
+	light->setShadowResolution(resolution);
 }

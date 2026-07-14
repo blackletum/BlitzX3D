@@ -109,6 +109,8 @@ public:
 	void setRenderState(const RenderState& state);
 	void setEffect(gxEffect* effect);
 
+	void invalidateTransformCache();
+
 	//rendering
 	bool begin(const std::vector<gxLight*>& lights);
 	void clear(const float rgb[3], float alpha, float z, bool clear_argb, bool clear_z);

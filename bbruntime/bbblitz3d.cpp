@@ -1255,6 +1255,26 @@ void  bbLightRange(Light* light, float range) {
 	light->setRange(range);
 }
 
+void  bbLightShadows(Light* light, int enable) {
+	debugLight(light, "LightShadows");
+	light->setRealtimeShadow(enable ? true : false);
+}
+
+int  bbLightShadowsEnabled(Light* light) {
+	debugLight(light, "LightShadowsEnabled");
+	return light->hasRealtimeShadow() ? 1 : 0;
+}
+
+void  bbLightShadowRange(Light* light, float range) {
+	debugLight(light, "LightShadowRange");
+	light->setShadowRange(range);
+}
+
+void  bbLightShadowResolution(Light* light, int resolution) {
+	debugLight(light, "LightShadowResolution");
+	light->setShadowResolution(resolution);
+}
+
 void  bbLightConeAngles(Light* light, float inner, float outer) {
 	debugLight(light, "LightConeAngles");
 	inner *= dtor;
@@ -2326,6 +2346,10 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("LightColor%light#red#green#blue", bbLightColor);
 	rtSym("LightRange%light#range", bbLightRange);
 	rtSym("LightConeAngles%light#inner_angle#outer_angle", bbLightConeAngles);
+	rtSym("LightShadows%light%enable=1", bbLightShadows);
+	rtSym("%LightShadowsEnabled%light", bbLightShadowsEnabled);
+	rtSym("LightShadowRange%light#range=1000", bbLightShadowRange);
+	rtSym("LightShadowResolution%light%resolution=1024", bbLightShadowResolution);
 
 	rtSym("%CreatePivot%parent=0", bbCreatePivot);
 

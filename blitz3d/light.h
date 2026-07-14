@@ -22,6 +22,11 @@ public:
 
 	gxLight* getGxLight()const { return light; }
 
+	bool setRealtimeShadow(bool enable);
+	bool hasRealtimeShadow()const;
+	void setShadowRange(float range);
+	void setShadowResolution(int resolution);
+
 private:
 	friend class World;
 	gxLight* light;
