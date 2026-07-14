@@ -42,6 +42,10 @@ public:
 	virtual bool render(const RenderContext& rc) { return false; }
 	virtual void renderQueue(int type);
 
+	void renderShadowCasterQueue();
+	void renderShadowLitQueue(gxEffect* litEffect);
+	void clearQueue(int type);
+
 	virtual Sprite* getSprite() { return 0; }
 	virtual Terrain* getTerrain() { return 0; }
 	virtual PlaneModel* getPlaneModel() { return 0; }
