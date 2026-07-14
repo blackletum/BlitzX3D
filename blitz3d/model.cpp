@@ -37,6 +37,18 @@ public:
 		gx_scene->setEffect(gx_graphics->verifyEffect(effect) ? effect : nullptr);
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}
+
+	void renderShadowCaster() {
+		gx_scene->render(mesh, fv, vc, ft, tc);
+	}
+
+	void renderShadowLit(gxEffect* litEffect) {
+		gxCanvas* diffuse = brush.getTexture(0).getCanvas(0);
+		litEffect->setTexture("DiffuseTex", diffuse ? diffuse->getTexSurface() : nullptr);
+		litEffect->setFloat("HasDiffuseTex", diffuse ? 1.0f : 0.0f);
+		gx_scene->render(mesh, fv, vc, ft, tc);
+	}
+
 	void* operator new(size_t sz) {
 		static const int GROW = 256;
 		if(!pool) {
@@ -134,6 +146,20 @@ void Model::renderQueue(int type) {
 		q->render();
 		delete q;
 	}
+}
+
+void Model::renderShadowCasterQueue() {
+	for (MeshQueue* q : queues[QUEUE_OPAQUE]) q->renderShadowCaster();
+}
+
+void Model::renderShadowLitQueue(gxEffect* litEffect) {
+	for (MeshQueue* q : queues[QUEUE_OPAQUE]) q->renderShadowLit(litEffect);
+}
+
+void Model::clearQueue(int type) {
+	std::vector<MeshQueue*>* que = &queues[type];
+	for (MeshQueue* q : *que) delete q;
+	que->clear();
 }
 
 void Model::setEffect(gxEffect* e) {
