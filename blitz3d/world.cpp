@@ -362,16 +362,16 @@ static D3DXMATRIX toD3DXMatrix(const Transform& t) {
 static void renderShadowMaps() {
 	if (_shadowLights.empty()) return;
 
-	IDirect3DDevice9Ex* dev = gx_scene->dir3dDev;
-	IDirect3DSurface9* oldRT = nullptr;
-	IDirect3DSurface9* oldDS = nullptr;
-	D3DVIEWPORT9 oldVP;
-	dev->GetRenderTarget(0, &oldRT);
-	dev->GetDepthStencilSurface(&oldDS);
-	dev->GetViewport(&oldVP);
-
 	Vector cam_anchor;
 	if (!cam_que.empty()) cam_anchor = cam_que.top()->getRenderTform().v;
+
+	IDirect3DDevice9Ex* dev = gx_scene->dir3dDev;
+	IDirect3DSurface9* mainRT = nullptr;
+	IDirect3DSurface9* mainDS = nullptr;
+	D3DVIEWPORT9 mainVP;
+	dev->GetRenderTarget(0, &mainRT);
+	dev->GetDepthStencilSurface(&mainDS);
+	dev->GetViewport(&mainVP);
 
 	for (gxLight* light : _shadowLights) {
 
@@ -409,7 +409,6 @@ static void renderShadowMaps() {
 
 		RenderContext rc(light_world, light_frustum, false);
 
-		dev->BeginScene();
 		dev->SetRenderTarget(0, map->getColorSurface());
 		dev->SetDepthStencilSurface(map->getDepthSurface());
 
@@ -446,8 +445,6 @@ static void renderShadowMaps() {
 			mod->clearQueue(Model::QUEUE_TRANSPARENT);
 		}
 
-		dev->EndScene();
-
 		gxEffect* litFx = light->getLitEffect(gx_graphics);
 		if (litFx) {
 			litFx->setMatrix("LightView", toD3DXMatrix(light_view));
@@ -471,14 +468,12 @@ static void renderShadowMaps() {
 		}
 	}
 
-	dev->SetRenderTarget(0, oldRT);
-	dev->SetDepthStencilSurface(oldDS);
-	dev->SetViewport(&oldVP);
-	if (oldRT) oldRT->Release();
-	if (oldDS) oldDS->Release();
-
+	dev->SetRenderTarget(0, mainRT);
+	dev->SetDepthStencilSurface(mainDS);
+	if (mainRT) mainRT->Release();
+	if (mainDS) mainDS->Release();
+	dev->SetViewport(&mainVP);
 	gx_scene->setEffect(nullptr);
-	gx_scene->invalidateTransformCache();
 }
 
 void World::render(float tween) {
@@ -514,9 +509,9 @@ void World::render(float tween) {
 
 	while (!ord_que.empty()) { ord_mods.push_back(ord_que.top()); ord_que.pop(); }
 
-	renderShadowMaps();
-
 	if (!gx_scene->begin(_lights)) return;
+
+	renderShadowMaps();
 
 	while (!cam_que.empty()) {
 		Camera* cam = cam_que.top(); cam_que.pop();
@@ -588,6 +583,8 @@ void World::render(Model* mod, const RenderContext& rc) {
 		else {
 			gx_scene->setWorldMatrix(0);
 		}
+		mod->renderOpaqueQueue(Model::QUEUE_OPAQUE);
+
 		if (!_shadowLights.empty() && mod->getOrder() == 0) {
 			gx_scene->setZMode(gxScene::ZMODE_CMPONLY);
 			gx_scene->setBlendAdditive(true);
@@ -601,7 +598,7 @@ void World::render(Model* mod, const RenderContext& rc) {
 			gx_scene->setZMode(gxScene::ZMODE_NORMAL);
 		}
 
-		mod->renderQueue(Model::QUEUE_OPAQUE);
+		mod->clearQueue(Model::QUEUE_OPAQUE);
 	}
 
 	if(trans || mod->queueSize(Model::QUEUE_TRANSPARENT)) {

@@ -138,14 +138,15 @@ void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& b
 	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, renderEffect));
 }
 
-void Model::renderQueue(int type) {
+void Model::renderOpaqueQueue(int type) {
 	std::vector<MeshQueue*>* que = &queues[type];
 	std::stable_sort(que->begin(), que->end(), [](const MeshQueue* a, const MeshQueue* b) { return a->getBrush() < b->getBrush(); });
-	for (; que->size(); que->pop_back()) {
-		MeshQueue* q = que->back();
-		q->render();
-		delete q;
-	}
+	for (MeshQueue* q : *que) q->render();
+}
+
+void Model::renderQueue(int type) {
+	renderOpaqueQueue(type);
+	clearQueue(type);
 }
 
 void Model::renderShadowCasterQueue() {
