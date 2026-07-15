@@ -111,6 +111,7 @@ public:
 	void setEffect(gxEffect* effect);
 
 	void invalidateTransformCache();
+	void invalidateTextureCache();
 
 	//rendering
 	bool begin(const std::vector<gxLight*>& lights);

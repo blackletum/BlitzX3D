@@ -25,6 +25,7 @@ public:
 	virtual void setRenderBrush(const Brush& b);
 	virtual bool render(const RenderContext& rc);
 	virtual void renderQueue(int type);
+	virtual bool isMeshModel()const { return true; }
 
 	//boned mesh!
 	void createBones();

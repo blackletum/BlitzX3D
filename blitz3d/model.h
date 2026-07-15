@@ -42,7 +42,7 @@ public:
 	virtual bool render(const RenderContext& rc) { return false; }
 	virtual void renderQueue(int type);
 	void renderOpaqueQueue(int type);
-
+	virtual bool isMeshModel()const { return false; }
 	void renderShadowCasterQueue();
 	void renderShadowLitQueue(gxEffect* litEffect);
 	void clearQueue(int type);
