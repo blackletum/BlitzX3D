@@ -162,7 +162,12 @@ gxScene::~gxScene() {
 }
 
 void gxScene::setEffect(gxEffect* e) {
+	if (currentEffect == e) return;
 	currentEffect = e;
+	if (e == nullptr) {
+		dir3dDev->SetVertexShader(nullptr);
+		dir3dDev->SetPixelShader(nullptr);
+	}
 }
 
 gxEffect* gxScene::getEffect() const {
@@ -787,6 +792,14 @@ void gxScene::end() {
 	dir3dDev->EndScene();
 	RECT r = { (LONG)viewport.X, (LONG)viewport.Y, (LONG)(viewport.X + viewport.Width), (LONG)(viewport.Y + viewport.Height) };
 	target->damage(r);
+}
+
+void gxScene::setBlendAdditive(bool enable) {
+	setRS(D3DRS_ALPHABLENDENABLE, enable);
+	if (enable) {
+		setRS(D3DRS_SRCBLEND, D3DBLEND_ONE);
+		setRS(D3DRS_DESTBLEND, D3DBLEND_ONE);
+	}
 }
 
 void gxScene::invalidateTransformCache() {
