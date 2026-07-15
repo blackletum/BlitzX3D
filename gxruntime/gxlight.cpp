@@ -4,10 +4,11 @@
 #include "gxgraphics.h"
 #include "gxshadowmap.h"
 #include "gxeffect.h"
+#include "EmbeddedShaders.h"
 
-// should these be hardcoded? probably not, do i care? no
-static const char* SHADOWDEPTH_FX = "GFX/Shaders/ShadowDepth.fx";
-static const char* SHADOWLIT_FX = "GFX/Shaders/ShadowLit.fx";
+// rest in peace incompetence
+//static const char* SHADOWDEPTH_FX = "GFX/Shaders/ShadowDepth.fx";
+//static const char* SHADOWLIT_FX = "GFX/Shaders/ShadowLit.fx";
 
 gxLight::gxLight(gxScene* s, int type) :
 	scene(s), shadow_enabled(false), shadow_range(1000.f),
@@ -78,8 +79,8 @@ bool gxLight::setRealtimeShadow(bool enable, gxGraphics* graphics) {
 		return false;
 	}
 
-	if (!depth_effect) depth_effect = graphics->createEffect(SHADOWDEPTH_FX);
-	if (!lit_effect) lit_effect = graphics->createEffect(SHADOWLIT_FX);
+	if (!depth_effect) depth_effect = graphics->createEffect(EmbeddedShaders::ShadowDepth, strlen(EmbeddedShaders::ShadowDepth));
+	if (!lit_effect) lit_effect = graphics->createEffect(EmbeddedShaders::ShadowLit, strlen(EmbeddedShaders::ShadowLit));
 	if (!depth_effect || !lit_effect) {
 		if (depth_effect) { graphics->freeEffect(depth_effect); depth_effect = nullptr; }
 		if (lit_effect) { graphics->freeEffect(lit_effect); lit_effect = nullptr; }
