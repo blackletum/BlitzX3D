@@ -106,6 +106,22 @@ gxEffect* gxGraphics::createEffect(const std::string& filename) {
 	return e;
 }
 
+gxEffect* gxGraphics::createEffect(const char* source, size_t length) {
+	ID3DXEffect* effect = nullptr;
+	ID3DXBuffer* errors = nullptr;
+	HRESULT hr = D3DXCreateEffect(dir3dDev, source, (UINT)length, nullptr, nullptr, 0, nullptr, &effect, &errors);
+	if (FAILED(hr)) {
+		if (errors) {
+			runtime->debugLog((const char*)errors->GetBufferPointer());
+			errors->Release();
+		}
+		return nullptr;
+	}
+	gxEffect* e = new gxEffect(this, effect);
+	effect_set.insert(e);
+	return e;
+}
+
 gxEffect* gxGraphics::verifyEffect(gxEffect* e) {
 	return effect_set.count(e) ? e : nullptr;
 }

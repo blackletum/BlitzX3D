@@ -79,6 +79,7 @@ public:
 
 	// i wonder what this is for
 	gxEffect* createEffect(const std::string& filename);
+	gxEffect* createEffect(const char* source, size_t length);
 	gxEffect* verifyEffect(gxEffect* e);
 	void freeEffect(gxEffect* e);
 
