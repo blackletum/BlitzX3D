@@ -101,6 +101,7 @@ public:
 	void setFogDensity(float den);
 	void setFogMode(int mode);
 	void setZMode(int mode);
+	void setBlendAdditive(bool enable);
 	void setViewport(int x, int y, int w, int h);
 	void setOrthoProj(float nr, float fr, float nr_w, float nr_h);
 	void setPerspProj(float nr, float fr, float nr_w, float nr_h);

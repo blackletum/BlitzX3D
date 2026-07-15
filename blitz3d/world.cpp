@@ -1,12 +1,17 @@
 #include "std.h"
 #include <queue>
+#include <d3dx9.h>
 #include "world.h"
+#include "../gxruntime/gxshadowmap.h"
+#include "../gxruntime/gxeffect.h"
+#include "../gxruntime/gxgraphics.h"
 
 //0=tris compared for collision
 //1=max proj err of terrain
 float stats3d[10];
 
 extern gxScene* gx_scene;
+extern gxGraphics* gx_graphics;
 extern gxRuntime* gx_runtime;
 
 static std::vector<Object*> _enabled, _visible;
@@ -302,6 +307,7 @@ void World::update(float elapsed) {
 static Transform cam_tform;		//current camera transform
 
 static std::vector<gxLight*> _lights;
+static std::vector<gxLight*> _shadowLights;
 static std::vector<Mirror*> _mirrors;
 static std::vector<Listener*> _listeners;
 
@@ -334,6 +340,147 @@ void World::capture() {
 	for (Object* o : _visible) o->capture();
 }
 
+static Transform lightWorldTransform(const Vector& pos, Vector k) {
+	k.normalize();
+	Vector up(0, 1, 0);
+	if (fabsf(k.dot(up)) > 0.999f) up = Vector(0, 0, 1);
+	Vector i = up.cross(k); i.normalize();
+	Vector j = k.cross(i);
+	return Transform(Matrix(i, j, k), pos);
+}
+
+static D3DXMATRIX toD3DXMatrix(const Transform& t) {
+	D3DXMATRIX m;
+	D3DXMatrixIdentity(&m);
+	m._11 = t.m.i.x; m._12 = t.m.i.y; m._13 = t.m.i.z;
+	m._21 = t.m.j.x; m._22 = t.m.j.y; m._23 = t.m.j.z;
+	m._31 = t.m.k.x; m._32 = t.m.k.y; m._33 = t.m.k.z;
+	m._41 = t.v.x;   m._42 = t.v.y;   m._43 = t.v.z;
+	return m;
+}
+
+static void renderShadowMaps() {
+	if (_shadowLights.empty()) return;
+
+	IDirect3DDevice9Ex* dev = gx_scene->dir3dDev;
+	IDirect3DSurface9* oldRT = nullptr;
+	IDirect3DSurface9* oldDS = nullptr;
+	D3DVIEWPORT9 oldVP;
+	dev->GetRenderTarget(0, &oldRT);
+	dev->GetDepthStencilSurface(&oldDS);
+	dev->GetViewport(&oldVP);
+
+	Vector cam_anchor;
+	if (!cam_que.empty()) cam_anchor = cam_que.top()->getRenderTform().v;
+
+	for (gxLight* light : _shadowLights) {
+
+		gxEffect* depthFx = light->getDepthEffect(gx_graphics);
+		gxShadowMap* map = light->getShadowMap();
+		if (!depthFx || !map || !map->isValid()) continue;
+
+		bool is_spot = (light->d3d_light.Type == D3DLIGHT_SPOT);
+		Vector dir(light->d3d_light.Direction.x, light->d3d_light.Direction.y, light->d3d_light.Direction.z);
+		dir.normalize();
+
+		Vector origin;
+		float nr, fr, w, h;
+		Frustum light_frustum;
+
+		if (is_spot) {
+			origin = Vector(light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z);
+			nr = 1.0f;
+			fr = light->getShadowRange();
+			float half_extent = nr * tanf(light->d3d_light.Phi * 0.5f);
+			w = h = 2.0f * half_extent;
+			light_frustum = Frustum(nr, fr, w, h);
+		}
+		else {
+			float range = light->getShadowRange();
+			origin = cam_anchor - dir * range;
+			nr = 1.0f;
+			fr = range * 2.0f;
+			w = h = range * 2.0f;
+			light_frustum = Frustum::makeOrtho(nr, fr, w, h);
+		}
+
+		Transform light_world = lightWorldTransform(origin, dir);
+		Transform light_view = -light_world;
+
+		RenderContext rc(light_world, light_frustum, false);
+
+		dev->BeginScene();
+		dev->SetRenderTarget(0, map->getColorSurface());
+		dev->SetDepthStencilSurface(map->getDepthSurface());
+
+		D3DVIEWPORT9 vp = { 0, 0, (DWORD)map->getResolution(), (DWORD)map->getResolution(), 0.0f, 1.0f };
+		dev->SetViewport(&vp);
+		dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(255, 255, 255), 1.0f, 0);
+
+		gx_scene->setViewMatrix((gxScene::Matrix*)&light_view);
+		if (is_spot) gx_scene->setPerspProj(nr, fr, w, h);
+		else        gx_scene->setOrthoProj(nr, fr, w, h);
+		gx_scene->setZMode(gxScene::ZMODE_NORMAL);
+		gx_scene->setBlendAdditive(false);
+		gx_scene->setEffect(depthFx);
+		depthFx->setFloat("FarPlane", fr);
+
+		for (Model* mod : unord_mods) {
+			mod->render(rc);
+			if (mod->queueSize(Model::QUEUE_OPAQUE)) {
+				gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ?
+					(gxScene::Matrix*)&mod->getRenderTform() : nullptr);
+				mod->renderShadowCasterQueue();
+			}
+			mod->clearQueue(Model::QUEUE_OPAQUE);
+			mod->clearQueue(Model::QUEUE_TRANSPARENT);
+		}
+		for (Model* mod : ord_mods) {
+			mod->render(rc);
+			if (mod->queueSize(Model::QUEUE_OPAQUE)) {
+				gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ?
+					(gxScene::Matrix*)&mod->getRenderTform() : nullptr);
+				mod->renderShadowCasterQueue();
+			}
+			mod->clearQueue(Model::QUEUE_OPAQUE);
+			mod->clearQueue(Model::QUEUE_TRANSPARENT);
+		}
+
+		dev->EndScene();
+
+		gxEffect* litFx = light->getLitEffect(gx_graphics);
+		if (litFx) {
+			litFx->setMatrix("LightView", toD3DXMatrix(light_view));
+			D3DXMATRIX projm;
+			if (is_spot) D3DXMatrixPerspectiveLH(&projm, w, h, nr, fr);
+			else        D3DXMatrixOrthoLH(&projm, w, h, nr, fr);
+			litFx->setMatrix("LightProj", projm);
+			float col[4] = { light->d3d_light.Diffuse.r, light->d3d_light.Diffuse.g, light->d3d_light.Diffuse.b, 1.0f };
+			litFx->setVector("LightColor", col);
+			float dirv[4] = { dir.x, dir.y, dir.z, 0.0f };
+			litFx->setVector("LightDir", dirv);
+			float posv[4] = { light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z, 0.0f };
+			litFx->setVector("LightPos", posv);
+			litFx->setFloat("LightIsSpot", is_spot ? 1.0f : 0.0f);
+			litFx->setFloat("LightRange", light->getShadowRange());
+			litFx->setFloat("CosPhi", cosf(light->d3d_light.Phi * 0.5f));
+			litFx->setFloat("CosTheta", cosf(light->d3d_light.Theta * 0.5f));
+			litFx->setFloat("FarPlane", fr);
+			litFx->setFloat("ShadowTexelSize", 1.0f / (float)map->getResolution());
+			litFx->setTexture("ShadowMap", map->getTexture());
+		}
+	}
+
+	dev->SetRenderTarget(0, oldRT);
+	dev->SetDepthStencilSurface(oldDS);
+	dev->SetViewport(&oldVP);
+	if (oldRT) oldRT->Release();
+	if (oldDS) oldDS->Release();
+
+	gx_scene->setEffect(nullptr);
+	gx_scene->invalidateTransformCache();
+}
+
 void World::render(float tween) {
 
 	//set render tweens, and build ordered and unordered model lists...
@@ -342,6 +489,7 @@ void World::render(float tween) {
 
 	_visible.clear();
 	_lights.clear();
+	_shadowLights.clear();
 	_mirrors.clear();
 	_listeners.clear();
 
@@ -350,7 +498,11 @@ void World::render(float tween) {
 	for (Object* o : _visible) {
 		if (!o->beginRender(tween)) continue;
 
-		if (Light* t = o->getLight())    _lights.push_back(t->getGxLight());
+		if (Light* t = o->getLight()) {
+			gxLight* gl = t->getGxLight();
+			if (gl->hasRealtimeShadow()) _shadowLights.push_back(gl);
+			else _lights.push_back(gl);
+		}
 		else if (Camera* t = o->getCamera())   cam_que.push(t);
 		else if (Mirror* t = o->getMirror())   _mirrors.push_back(t);
 		else if (Listener* t = o->getListener()) _listeners.push_back(t);
@@ -362,7 +514,9 @@ void World::render(float tween) {
 
 	while (!ord_que.empty()) { ord_mods.push_back(ord_que.top()); ord_que.pop(); }
 
-	if(!gx_scene->begin(_lights)) return;
+	renderShadowMaps();
+
+	if (!gx_scene->begin(_lights)) return;
 
 	while (!cam_que.empty()) {
 		Camera* cam = cam_que.top(); cam_que.pop();
@@ -434,6 +588,19 @@ void World::render(Model* mod, const RenderContext& rc) {
 		else {
 			gx_scene->setWorldMatrix(0);
 		}
+		if (!_shadowLights.empty() && mod->getOrder() == 0) {
+			gx_scene->setZMode(gxScene::ZMODE_CMPONLY);
+			gx_scene->setBlendAdditive(true);
+			for (gxLight* light : _shadowLights) {
+				gxEffect* litFx = light->getLitEffect(gx_graphics);
+				if (!litFx) continue;
+				gx_scene->setEffect(litFx);
+				mod->renderShadowLitQueue(litFx);
+			}
+			gx_scene->setBlendAdditive(false);
+			gx_scene->setZMode(gxScene::ZMODE_NORMAL);
+		}
+
 		mod->renderQueue(Model::QUEUE_OPAQUE);
 	}
 
