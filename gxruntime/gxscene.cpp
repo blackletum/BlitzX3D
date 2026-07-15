@@ -802,6 +802,12 @@ void gxScene::setBlendAdditive(bool enable) {
 	}
 }
 
+void gxScene::invalidateTextureCache() {
+	memset(d3d_tss, 0x55, sizeof(d3d_tss));
+	memset(d3d_samp, 0x55, sizeof(d3d_samp));
+	memset(texstate, 0x55, sizeof(texstate));
+}
+
 void gxScene::invalidateTransformCache() {
 	memset(&viewmatrix, 0x55, sizeof(viewmatrix));
 	memset(&worldmatrix, 0x55, sizeof(worldmatrix));

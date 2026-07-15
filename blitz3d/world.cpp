@@ -425,6 +425,7 @@ static void renderShadowMaps() {
 		depthFx->setFloat("FarPlane", fr);
 
 		for (Model* mod : unord_mods) {
+			if (!mod->isMeshModel()) continue;
 			mod->render(rc);
 			if (mod->queueSize(Model::QUEUE_OPAQUE)) {
 				gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ?
@@ -435,6 +436,7 @@ static void renderShadowMaps() {
 			mod->clearQueue(Model::QUEUE_TRANSPARENT);
 		}
 		for (Model* mod : ord_mods) {
+			if (!mod->isMeshModel()) continue;
 			mod->render(rc);
 			if (mod->queueSize(Model::QUEUE_OPAQUE)) {
 				gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ?
@@ -585,7 +587,7 @@ void World::render(Model* mod, const RenderContext& rc) {
 		}
 		mod->renderOpaqueQueue(Model::QUEUE_OPAQUE);
 
-		if (!_shadowLights.empty() && mod->getOrder() == 0) {
+		if (!_shadowLights.empty() && mod->getOrder() == 0 && mod->isMeshModel()) {
 			gx_scene->setZMode(gxScene::ZMODE_CMPONLY);
 			gx_scene->setBlendAdditive(true);
 			for (gxLight* light : _shadowLights) {
@@ -596,9 +598,8 @@ void World::render(Model* mod, const RenderContext& rc) {
 			}
 			gx_scene->setBlendAdditive(false);
 			gx_scene->setZMode(gxScene::ZMODE_NORMAL);
+			gx_scene->invalidateTextureCache();
 		}
-
-		mod->clearQueue(Model::QUEUE_OPAQUE);
 	}
 
 	if(trans || mod->queueSize(Model::QUEUE_TRANSPARENT)) {
