@@ -41,6 +41,7 @@ public:
 	virtual void setRenderBrush(const Brush& b) {}
 	virtual bool render(const RenderContext& rc) { return false; }
 	virtual void renderQueue(int type);
+	void renderOpaqueQueue(int type);
 
 	void renderShadowCasterQueue();
 	void renderShadowLitQueue(gxEffect* litEffect);
