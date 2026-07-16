@@ -32,8 +32,8 @@ float4 PS(VS_OUTPUT IN) : COLOR {
 
 technique ShadowDepth {
     pass P0 {
-        VertexShader = compile vs_2_0 VS();
-        PixelShader  = compile ps_2_0 PS();
+        VertexShader = compile vs_3_0 VS();
+        PixelShader  = compile ps_3_0 PS();
     }
 }
 )";
@@ -104,12 +104,20 @@ float SampleShadow(float2 uv, float refDepth) {
     float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
 
     float shadow = 0.0;
-    shadow += (refDepth <= tex2D(ShadowSampler, uv + float2(-0.5, -0.5) * ShadowTexelSize).r + ShadowBias) ? 1.0 : 0.0;
-    shadow += (refDepth <= tex2D(ShadowSampler, uv + float2( 0.5, -0.5) * ShadowTexelSize).r + ShadowBias) ? 1.0 : 0.0;
-    shadow += (refDepth <= tex2D(ShadowSampler, uv + float2(-0.5,  0.5) * ShadowTexelSize).r + ShadowBias) ? 1.0 : 0.0;
-    shadow += (refDepth <= tex2D(ShadowSampler, uv + float2( 0.5,  0.5) * ShadowTexelSize).r + ShadowBias) ? 1.0 : 0.0;
-    shadow *= 0.25;
+    float count = 0.0;
 
+    [unroll]
+    for (int i = 0; i < 4; i++) {
+        [unroll]
+        for (int j = 0; j < 4; j++) {
+            float2 offset = float2(i - 1.5, j - 1.5) * ShadowTexelSize;
+            float depth = tex2D(ShadowSampler, uv + offset).r;
+            shadow += (refDepth <= depth + ShadowBias) ? 1.0 : 0.0;
+            count += 1.0;
+        }
+    }
+
+    shadow /= count;
     return lerp(1.0, shadow, inside);
 }
 
@@ -140,8 +148,8 @@ float4 PS(VS_OUTPUT IN) : COLOR {
 
 technique ShadowLit {
     pass P0 {
-        VertexShader = compile vs_2_0 VS();
-        PixelShader  = compile ps_2_0 PS();
+        VertexShader = compile vs_3_0 VS();
+        PixelShader  = compile ps_3_0 PS();
     }
 }
 )";
