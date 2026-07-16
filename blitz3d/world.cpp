@@ -359,13 +359,173 @@ static D3DXMATRIX toD3DXMatrix(const Transform& t) {
 	return m;
 }
 
-static void renderShadowMaps() {
-	if (_shadowLights.empty()) return;
+static void drawShadowCasters(const RenderContext& rc) {
+	for (Model* mod : unord_mods) {
+		if(!mod->isMeshModel()) continue;
+		mod->render(rc);
+		if(mod->queueSize(Model::QUEUE_OPAQUE)) {
+			gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ? (gxScene::Matrix*)&mod->getRenderTform() : nullptr);
+			mod->renderShadowCasterQueue();
+		}
+		mod->clearQueue(Model::QUEUE_OPAQUE);
+		mod->clearQueue(Model::QUEUE_TRANSPARENT);
+	}
+	for (Model* mod : ord_mods) {
+		if(!mod->isMeshModel()) continue;
+		mod->render(rc);
+		if(mod->queueSize(Model::QUEUE_OPAQUE)) {
+			gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ? (gxScene::Matrix*)&mod->getRenderTform() : nullptr);
+			mod->renderShadowCasterQueue();
+		}
+		mod->clearQueue(Model::QUEUE_OPAQUE);
+		mod->clearQueue(Model::QUEUE_TRANSPARENT);
+	}
+}
 
-	Vector cam_anchor;
-	if (!cam_que.empty()) cam_anchor = cam_que.top()->getRenderTform().v;
+static void renderShadowMap2D(gxLight* light, const Vector& cam_anchor) {
+	gxEffect* depthFx = light->getDepthEffect(gx_graphics);
+	gxShadowMap* map = light->getShadowMap();
+	if(!depthFx || !map || !map->isValid()) return;
 
 	IDirect3DDevice9Ex* dev = gx_scene->dir3dDev;
+
+	bool is_spot = (light->d3d_light.Type == D3DLIGHT_SPOT);
+	Vector dir(light->d3d_light.Direction.x, light->d3d_light.Direction.y, light->d3d_light.Direction.z);
+	dir.normalize();
+
+	Vector origin;
+	float nr, fr, w, h;
+	Frustum light_frustum;
+
+	if(is_spot) {
+		origin = Vector(light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z);
+		nr = 1.0f;
+		fr = light->getShadowRange();
+		float half_extent = nr * tanf(light->d3d_light.Phi * 0.5f);
+		w = h = 2.0f * half_extent;
+		light_frustum = Frustum(nr, fr, w, h);
+	}
+	else {
+		float range = light->getShadowRange();
+		origin = cam_anchor - dir * range;
+		nr = 1.0f;
+		fr = range * 2.0f;
+		w = h = range * 2.0f;
+		light_frustum = Frustum::makeOrtho(nr, fr, w, h);
+	}
+
+	Transform light_world = lightWorldTransform(origin, dir);
+	Transform light_view = -light_world;
+
+	RenderContext rc(light_world, light_frustum, false);
+
+	dev->SetRenderTarget(0, map->getColorSurface());
+	dev->SetDepthStencilSurface(map->getDepthSurface());
+
+	D3DVIEWPORT9 vp = { 0, 0, (DWORD)map->getResolution(), (DWORD)map->getResolution(), 0.0f, 1.0f };
+	dev->SetViewport(&vp);
+	dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(255, 255, 255), 1.0f, 0);
+
+	gx_scene->setViewMatrix((gxScene::Matrix*)&light_view);
+	if(is_spot) gx_scene->setPerspProj(nr, fr, w, h);
+	else        gx_scene->setOrthoProj(nr, fr, w, h);
+	gx_scene->setZMode(gxScene::ZMODE_NORMAL);
+	gx_scene->setBlendAdditive(false);
+	gx_scene->setEffect(depthFx);
+	depthFx->setFloat("FarPlane", fr);
+
+	drawShadowCasters(rc);
+
+	gxEffect* litFx = light->getLitEffect(gx_graphics);
+	if(litFx) {
+		litFx->setMatrix("LightView", toD3DXMatrix(light_view));
+		D3DXMATRIX projm;
+		if(is_spot) D3DXMatrixPerspectiveLH(&projm, w, h, nr, fr);
+		else        D3DXMatrixOrthoLH(&projm, w, h, nr, fr);
+		litFx->setMatrix("LightProj", projm);
+		float col[4] = { light->d3d_light.Diffuse.r, light->d3d_light.Diffuse.g, light->d3d_light.Diffuse.b, 1.0f };
+		litFx->setVector("LightColor", col);
+		float dirv[4] = { dir.x, dir.y, dir.z, 0.0f };
+		litFx->setVector("LightDir", dirv);
+		float posv[4] = { light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z, 0.0f };
+		litFx->setVector("LightPos", posv);
+		litFx->setFloat("LightIsSpot", is_spot ? 1.0f : 0.0f);
+		litFx->setFloat("LightRange", light->getShadowRange());
+		litFx->setFloat("CosPhi", cosf(light->d3d_light.Phi * 0.5f));
+		litFx->setFloat("CosTheta", cosf(light->d3d_light.Theta * 0.5f));
+		litFx->setFloat("FarPlane", fr);
+		litFx->setFloat("ShadowTexelSize", 1.0f / (float)map->getResolution());
+		float resolutionScale = 1024.0f / (float)map->getResolution();
+		litFx->setFloat("ShadowBias", 0.0015f * resolutionScale);
+		litFx->setTexture("ShadowMap", map->getTexture());
+	}
+}
+
+static void renderShadowMapCube(gxLight* light) {
+	gxEffect* depthFx = light->getDepthEffect(gx_graphics);
+	gxShadowMap* map = light->getShadowMap();
+	if(!depthFx || !map || !map->isValid()) return;
+
+	IDirect3DDevice9Ex* dev = gx_scene->dir3dDev;
+
+	Vector origin(light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z);
+	float nr = 1.0f;
+	float fr = light->getShadowRange();
+	float w = 2.0f * nr, h = w;
+	Frustum face_frustum(nr, fr, w, h);
+
+	static const Vector face_dirs[6] = {
+		Vector(1,0,0), Vector(-1,0,0),
+		Vector(0,1,0), Vector(0,-1,0),
+		Vector(0,0,1), Vector(0,0,-1)
+	};
+
+	D3DVIEWPORT9 vp = { 0, 0, (DWORD)map->getResolution(), (DWORD)map->getResolution(), 0.0f, 1.0f };
+
+	gxEffect* litFx = light->getLitEffect(gx_graphics);
+
+	for (int face = 0; face < 6; ++face) {
+		Transform light_world = lightWorldTransform(origin, face_dirs[face]);
+		Transform light_view = -light_world;
+
+		RenderContext rc(light_world, face_frustum, false);
+
+		dev->SetRenderTarget(0, map->getCubeFaceSurface(face));
+		dev->SetDepthStencilSurface(map->getDepthSurface());
+		dev->SetViewport(&vp);
+		dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(255, 255, 255), 1.0f, 0);
+
+		gx_scene->setViewMatrix((gxScene::Matrix*)&light_view);
+		gx_scene->setPerspProj(nr, fr, w, h);
+		gx_scene->setZMode(gxScene::ZMODE_NORMAL);
+		gx_scene->setBlendAdditive(false);
+		gx_scene->setEffect(depthFx);
+		float posv3[3] = { origin.x, origin.y, origin.z };
+		depthFx->setVector("LightPos", posv3);
+		depthFx->setFloat("FarPlane", fr);
+
+		drawShadowCasters(rc);
+	}
+
+	if(litFx) {
+		float col[4] = { light->d3d_light.Diffuse.r, light->d3d_light.Diffuse.g, light->d3d_light.Diffuse.b, 1.0f };
+		litFx->setVector("LightColor", col);
+		float posv[4] = { origin.x, origin.y, origin.z, 0.0f };
+		litFx->setVector("LightPos", posv);
+		litFx->setFloat("LightRange", light->getShadowRange());
+		litFx->setFloat("FarPlane", fr);
+		litFx->setTexture("ShadowCubeMap", map->getCubeTexture());
+	}
+}
+
+static void renderShadowMaps() {
+	if(_shadowLights.empty()) return;
+
+	Vector cam_anchor;
+	if(!cam_que.empty()) cam_anchor = cam_que.top()->getRenderTform().v;
+
+	IDirect3DDevice9Ex* dev = gx_scene->dir3dDev;
+
 	IDirect3DSurface9* mainRT = nullptr;
 	IDirect3DSurface9* mainDS = nullptr;
 	D3DVIEWPORT9 mainVP;
@@ -374,100 +534,8 @@ static void renderShadowMaps() {
 	dev->GetViewport(&mainVP);
 
 	for (gxLight* light : _shadowLights) {
-
-		gxEffect* depthFx = light->getDepthEffect(gx_graphics);
-		gxShadowMap* map = light->getShadowMap();
-		if (!depthFx || !map || !map->isValid()) continue;
-
-		bool is_spot = (light->d3d_light.Type == D3DLIGHT_SPOT);
-		Vector dir(light->d3d_light.Direction.x, light->d3d_light.Direction.y, light->d3d_light.Direction.z);
-		dir.normalize();
-
-		Vector origin;
-		float nr, fr, w, h;
-		Frustum light_frustum;
-
-		if (is_spot) {
-			origin = Vector(light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z);
-			nr = 1.0f;
-			fr = light->getShadowRange();
-			float half_extent = nr * tanf(light->d3d_light.Phi * 0.5f);
-			w = h = 2.0f * half_extent;
-			light_frustum = Frustum(nr, fr, w, h);
-		}
-		else {
-			float range = light->getShadowRange();
-			origin = cam_anchor - dir * range;
-			nr = 1.0f;
-			fr = range * 2.0f;
-			w = h = range * 2.0f;
-			light_frustum = Frustum::makeOrtho(nr, fr, w, h);
-		}
-
-		Transform light_world = lightWorldTransform(origin, dir);
-		Transform light_view = -light_world;
-
-		RenderContext rc(light_world, light_frustum, false);
-
-		dev->SetRenderTarget(0, map->getColorSurface());
-		dev->SetDepthStencilSurface(map->getDepthSurface());
-
-		D3DVIEWPORT9 vp = { 0, 0, (DWORD)map->getResolution(), (DWORD)map->getResolution(), 0.0f, 1.0f };
-		dev->SetViewport(&vp);
-		dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(255, 255, 255), 1.0f, 0);
-
-		gx_scene->setViewMatrix((gxScene::Matrix*)&light_view);
-		if (is_spot) gx_scene->setPerspProj(nr, fr, w, h);
-		else        gx_scene->setOrthoProj(nr, fr, w, h);
-		gx_scene->setZMode(gxScene::ZMODE_NORMAL);
-		gx_scene->setBlendAdditive(false);
-		gx_scene->setEffect(depthFx);
-		depthFx->setFloat("FarPlane", fr);
-
-		for (Model* mod : unord_mods) {
-			mod->render(rc);
-			if (mod->queueSize(Model::QUEUE_OPAQUE)) {
-				gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ?
-					(gxScene::Matrix*)&mod->getRenderTform() : nullptr);
-				mod->renderShadowCasterQueue();
-			}
-			mod->clearQueue(Model::QUEUE_OPAQUE);
-			mod->clearQueue(Model::QUEUE_TRANSPARENT);
-		}
-		for (Model* mod : ord_mods) {
-			mod->render(rc);
-			if (mod->queueSize(Model::QUEUE_OPAQUE)) {
-				gx_scene->setWorldMatrix(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL ?
-					(gxScene::Matrix*)&mod->getRenderTform() : nullptr);
-				mod->renderShadowCasterQueue();
-			}
-			mod->clearQueue(Model::QUEUE_OPAQUE);
-			mod->clearQueue(Model::QUEUE_TRANSPARENT);
-		}
-
-		gxEffect* litFx = light->getLitEffect(gx_graphics);
-		if (litFx) {
-			litFx->setMatrix("LightView", toD3DXMatrix(light_view));
-			D3DXMATRIX projm;
-			if (is_spot) D3DXMatrixPerspectiveLH(&projm, w, h, nr, fr);
-			else        D3DXMatrixOrthoLH(&projm, w, h, nr, fr);
-			litFx->setMatrix("LightProj", projm);
-			float col[4] = { light->d3d_light.Diffuse.r, light->d3d_light.Diffuse.g, light->d3d_light.Diffuse.b, 1.0f };
-			litFx->setVector("LightColor", col);
-			float dirv[4] = { dir.x, dir.y, dir.z, 0.0f };
-			litFx->setVector("LightDir", dirv);
-			float posv[4] = { light->d3d_light.Position.x, light->d3d_light.Position.y, light->d3d_light.Position.z, 0.0f };
-			litFx->setVector("LightPos", posv);
-			litFx->setFloat("LightIsSpot", is_spot ? 1.0f : 0.0f);
-			litFx->setFloat("LightRange", light->getShadowRange());
-			litFx->setFloat("CosPhi", cosf(light->d3d_light.Phi * 0.5f));
-			litFx->setFloat("CosTheta", cosf(light->d3d_light.Theta * 0.5f));
-			litFx->setFloat("FarPlane", fr);
-			litFx->setFloat("ShadowTexelSize", 1.0f / (float)map->getResolution());
-			float resolutionScale = 1024.0f / (float)map->getResolution();
-			litFx->setFloat("ShadowBias", 0.0015f * resolutionScale);
-			litFx->setTexture("ShadowMap", map->getTexture());
-		}
+		if (light->isPointShadow()) renderShadowMapCube(light);
+		else renderShadowMap2D(light, cam_anchor);
 	}
 
 	dev->SetRenderTarget(0, mainRT);

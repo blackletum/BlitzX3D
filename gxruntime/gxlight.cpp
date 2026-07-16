@@ -59,19 +59,16 @@ bool gxLight::setRealtimeShadow(bool enable, gxGraphics* graphics) {
 		return true;
 	}
 
-	if (d3d_light.Type == D3DLIGHT_POINT) {
+	if(!graphics) {
 		shadow_enabled = false;
 		return false;
 	}
 
-	if (!graphics) {
-		shadow_enabled = false;
-		return false;
-	}
+	bool is_point = (d3d_light.Type == D3DLIGHT_POINT);
 
-	if (!shadow_map || shadow_map->getResolution() != shadow_resolution) {
+	if(!shadow_map || shadow_map->getResolution() != shadow_resolution || shadow_map->isCube() != is_point) {
 		delete shadow_map;
-		shadow_map = new gxShadowMap(graphics, shadow_resolution);
+		shadow_map = new gxShadowMap(graphics, shadow_resolution, is_point);
 	}
 	if (!shadow_map->isValid()) {
 		delete shadow_map; shadow_map = nullptr;
@@ -79,11 +76,14 @@ bool gxLight::setRealtimeShadow(bool enable, gxGraphics* graphics) {
 		return false;
 	}
 
-	if (!depth_effect) depth_effect = graphics->createEffect(EmbeddedShaders::ShadowDepth, strlen(EmbeddedShaders::ShadowDepth));
-	if (!lit_effect) lit_effect = graphics->createEffect(EmbeddedShaders::ShadowLit, strlen(EmbeddedShaders::ShadowLit));
-	if (!depth_effect || !lit_effect) {
-		if (depth_effect) { graphics->freeEffect(depth_effect); depth_effect = nullptr; }
-		if (lit_effect) { graphics->freeEffect(lit_effect); lit_effect = nullptr; }
+	const char* depthShader = is_point ? EmbeddedShaders::ShadowDepthCube : EmbeddedShaders::ShadowDepth;
+	const char* litShader = is_point ? EmbeddedShaders::ShadowLitPoint : EmbeddedShaders::ShadowLit;
+
+	if (!depth_effect) depth_effect = graphics->createEffect(depthShader, strlen(depthShader));
+	if (!lit_effect) lit_effect = graphics->createEffect(litShader, strlen(litShader));
+	if(!depth_effect || !lit_effect) {
+		if(depth_effect) { graphics->freeEffect(depth_effect); depth_effect = nullptr; }
+		if(lit_effect) { graphics->freeEffect(lit_effect); lit_effect = nullptr; }
 		delete shadow_map; shadow_map = nullptr;
 		shadow_enabled = false;
 		return false;
