@@ -153,4 +153,117 @@ technique ShadowLit {
     }
 }
 )";
+
+    static const char* ShadowDepthCube = R"(
+float4x4 World;
+float4x4 WorldViewProj;
+
+float3 LightPos = float3(0, 0, 0);
+float  FarPlane = 1000.0;
+
+struct VS_INPUT {
+    float3 Pos : POSITION;
+};
+
+struct VS_OUTPUT {
+    float4 Pos      : POSITION;
+    float3 WorldPos : TEXCOORD0;
+};
+
+VS_OUTPUT VS(VS_INPUT IN) {
+    VS_OUTPUT OUT;
+    float4 worldPos = mul(float4(IN.Pos, 1.0), World);
+    OUT.Pos = mul(float4(IN.Pos, 1.0), WorldViewProj);
+    OUT.WorldPos = worldPos.xyz;
+    return OUT;
+}
+
+float4 PS(VS_OUTPUT IN) : COLOR {
+    float d = saturate(length(IN.WorldPos - LightPos) / max(FarPlane, 0.0001));
+    return float4(d, d, d, 1.0);
+}
+
+technique ShadowDepthCube {
+    pass P0 {
+        VertexShader = compile vs_2_0 VS();
+        PixelShader  = compile ps_2_0 PS();
+    }
+}
+)";
+
+    static const char* ShadowLitPoint = R"(
+float4x4 World;
+float4x4 WorldViewProj;
+
+float3 LightPos = float3(0, 0, 0);
+float3 LightColor = float3(1, 1, 1);
+float  LightRange = 1000.0;
+float  FarPlane = 1000.0;
+float  ShadowBias = 0.0025;
+
+texture  DiffuseTex;
+float    HasDiffuseTex;
+
+sampler2D DiffuseSampler = sampler_state {
+    Texture = <DiffuseTex>;
+    MinFilter = LINEAR; MagFilter = LINEAR; MipFilter = LINEAR;
+    AddressU = WRAP; AddressV = WRAP;
+};
+
+texture ShadowCubeMap;
+samplerCUBE ShadowSampler = sampler_state {
+    Texture = <ShadowCubeMap>;
+    MinFilter = POINT; MagFilter = POINT; MipFilter = NONE;
+    AddressU = CLAMP; AddressV = CLAMP; AddressW = CLAMP;
+};
+
+struct VS_INPUT {
+    float3 Pos    : POSITION;
+    float3 Normal : NORMAL;
+    float2 UV     : TEXCOORD0;
+};
+
+struct VS_OUTPUT {
+    float4 Pos      : POSITION;
+    float3 WorldPos : TEXCOORD0;
+    float3 WorldN   : TEXCOORD1;
+    float2 UV       : TEXCOORD2;
+};
+
+VS_OUTPUT VS(VS_INPUT IN) {
+    VS_OUTPUT OUT;
+    float4 worldPos = mul(float4(IN.Pos, 1.0), World);
+    OUT.Pos = mul(float4(IN.Pos, 1.0), WorldViewProj);
+    OUT.WorldPos = worldPos.xyz;
+    OUT.WorldN = normalize(mul(float4(IN.Normal, 0.0), World).xyz);
+    OUT.UV = IN.UV;
+    return OUT;
+}
+
+float4 PS(VS_OUTPUT IN) : COLOR {
+    float3 N = normalize(IN.WorldN);
+
+    float3 toLight = LightPos - IN.WorldPos;
+    float dist = max(length(toLight), 0.0001);
+    float3 L = toLight / dist;
+
+    float NdotL = saturate(dot(N, L));
+    float distAtten = saturate(1.0 - dist / max(LightRange, 0.0001));
+
+    float refDepth = dist / max(FarPlane, 0.0001);
+    float stored = texCUBE(ShadowSampler, -L).r;
+    float shadow = (refDepth <= stored + ShadowBias) ? 1.0 : 0.0;
+
+    float3 albedo = lerp(float3(1, 1, 1), tex2D(DiffuseSampler, IN.UV).rgb, HasDiffuseTex);
+    float3 result = albedo * LightColor * NdotL * distAtten * shadow;
+    return float4(result, 1.0);
+}
+
+technique ShadowLitPoint {
+    pass P0 {
+        VertexShader = compile vs_2_0 VS();
+        PixelShader  = compile ps_2_0 PS();
+    }
+}
+)";
 }

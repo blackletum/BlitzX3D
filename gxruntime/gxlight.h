@@ -50,6 +50,7 @@ public:
 	int getShadowResolution()const { return shadow_resolution; }
 
 	gxShadowMap* getShadowMap()const { return shadow_map; }
+	bool isPointShadow()const { return hasRealtimeShadow() && d3d_light.Type == D3DLIGHT_POINT; }
 
 	gxEffect* getDepthEffect(gxGraphics* graphics);
 	gxEffect* getLitEffect(gxGraphics* graphics);
