@@ -464,6 +464,8 @@ static void renderShadowMaps() {
 			litFx->setFloat("CosTheta", cosf(light->d3d_light.Theta * 0.5f));
 			litFx->setFloat("FarPlane", fr);
 			litFx->setFloat("ShadowTexelSize", 1.0f / (float)map->getResolution());
+			float resolutionScale = 1024.0f / (float)map->getResolution();
+			litFx->setFloat("ShadowBias", 0.0015f * resolutionScale);
 			litFx->setTexture("ShadowMap", map->getTexture());
 		}
 	}
