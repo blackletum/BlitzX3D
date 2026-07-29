@@ -1,10 +1,9 @@
+#include "std.h"
 #include "gxaudio_stream.h"
-
 #include "gxaudio.h"
 #include "gxsound.h"
 #include "gxchannel.h"
 #include "gxruntime.h"
-#include "std.h"
 
 #include "../openAL/include/dr_wav.h"
 #include "../openAL/include/dr_mp3.h"

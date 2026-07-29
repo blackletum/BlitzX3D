@@ -110,7 +110,7 @@ enum { WM_STOP = WM_APP + 1, WM_RUN, WM_END };
 ////////////////////
 gxRuntime* gxRuntime::openRuntime(HINSTANCE hinst, const std::string& cmd_line, Debugger* d) {
 	SetAppDPIAware();
-	if(runtime) return 0;
+	if (runtime) return 0;
 
 	//create debugger
 	debugger = d;
@@ -179,7 +179,7 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 	if (osinfodll) {
 		typedef void (WINAPI* RtlGetVersionFunc) (OSVERSIONINFO*);
 		RtlGetVersionFunc RtlGetVersion = (RtlGetVersionFunc)GetProcAddress(osinfodll, "RtlGetVersion");
-		if(RtlGetVersion) RtlGetVersion(&osinfo);
+		if (RtlGetVersion) RtlGetVersion(&osinfo);
 		FreeLibrary(osinfodll);
 	}
 
@@ -193,11 +193,11 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 }
 
 gxRuntime::~gxRuntime() {
-	while(timers.size()) freeTimer(*timers.begin());
-	if(audio) closeAudio(audio);
+	while (timers.size()) freeTimer(*timers.begin());
+	if (audio) closeAudio(audio);
 	gxAudio_Shutdown();
-	if(graphics) closeGraphics(graphics);
-	if(input) closeInput(input);
+	if (graphics) closeGraphics(graphics);
+	if (input) closeInput(input);
 	TIMECAPS tc;
 	timeGetDevCaps(&tc, sizeof(tc));
 	timeEndPeriod(tc.wPeriodMin);
@@ -211,27 +211,27 @@ gxRuntime::~gxRuntime() {
 }
 
 void gxRuntime::pauseAudio() {
-	if(audio) audio->pause();
+	if (audio) audio->pause();
 }
 
 void gxRuntime::resumeAudio() {
-	if(audio) audio->resume();
+	if (audio) audio->resume();
 }
 
 void gxRuntime::restoreGraphics() {
-	if(auto_suspend) {
-		if(!graphics->restore()) gfx_lost = true;
+	if (auto_suspend) {
+		if (!graphics->restore()) gfx_lost = true;
 	}
 }
 
 void gxRuntime::resetInput() {
-	if(input) input->reset();
+	if (input) input->reset();
 }
 
 void gxRuntime::acquireInput() {
-	if(!input) return;
-	if(gfx_mode == GMODE_EXCLUSIVE) {
-		if(use_di) {
+	if (!input) return;
+	if (gfx_mode == GMODE_EXCLUSIVE) {
+		if (use_di) {
 			use_di = input->acquire();
 		}
 		else {
@@ -241,8 +241,8 @@ void gxRuntime::acquireInput() {
 }
 
 void gxRuntime::unacquireInput() {
-	if(!input) return;
-	if(gfx_mode == GMODE_EXCLUSIVE && use_di) input->unacquire();
+	if (!input) return;
+	if (gfx_mode == GMODE_EXCLUSIVE && use_di) input->unacquire();
 	input->reset();
 }
 
@@ -256,16 +256,16 @@ void gxRuntime::suspend() {
 	suspended = true;
 	busy = false;
 
-	if(gfx_mode == GMODE_EXCLUSIVE) ShowCursor(1);
+	if (gfx_mode == GMODE_EXCLUSIVE) ShowCursor(1);
 
-	if(debugger) debugger->debugStop();
+	if (debugger) debugger->debugStop();
 }
 
 ////////////
 // RESUME //
 ////////////
 void gxRuntime::resume() {
-	if(gfx_mode == GMODE_EXCLUSIVE) ShowCursor(0);
+	if (gfx_mode == GMODE_EXCLUSIVE) ShowCursor(0);
 	busy = true;
 	acquireInput();
 	restoreGraphics();
@@ -273,14 +273,14 @@ void gxRuntime::resume() {
 	suspended = false;
 	busy = false;
 
-	if(debugger) debugger->debugRun();
+	if (debugger) debugger->debugRun();
 }
 
 ///////////////////
 // FORCE SUSPEND //
 ///////////////////
 void gxRuntime::forceSuspend() {
-	if(gfx_mode == GMODE_EXCLUSIVE) {
+	if (gfx_mode == GMODE_EXCLUSIVE) {
 		SetForegroundWindow(GetDesktopWindow());
 		ShowWindow(GetDesktopWindow(), SW_SHOW);
 	}
@@ -293,7 +293,7 @@ void gxRuntime::forceSuspend() {
 // FORCE RESUME //
 //////////////////
 void gxRuntime::forceResume() {
-	if(gfx_mode == GMODE_EXCLUSIVE) {
+	if (gfx_mode == GMODE_EXCLUSIVE) {
 		SetForegroundWindow(hwnd);
 		ShowWindow(hwnd, SW_SHOWMAXIMIZED);
 	}
@@ -362,45 +362,16 @@ void gxRuntime::paint() {
 //////////
 
 void gxRuntime::flip(bool vwait) {
-MSG msg;
-while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-	TranslateMessage(&msg);
-	DispatchMessage(&msg);
-	if (!run_flag) {
-		return;
+	MSG msg;
+	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		if (!run_flag) {
+			return;
+		}
 	}
-}
 
-gxAudio_UpdateStreams();
-
-gxCanvas* b = graphics->getBackCanvas();
-gxCanvas* f = graphics->getFrontCanvas();
-int n;
-switch(gfx_mode) {
-	case GMODE_SCALED:
-	case GMODE_FIXED:
-		if(vwait) graphics->vwait();
-		f->setModify(b->getModify());
-		if(f->getModify() != mod_cnt) {
-			mod_cnt = f->getModify();
-			paint();
-		}
-		break;
-	case GMODE_EXCLUSIVE:
-		if(vwait) {
-			BOOL vb;
-			while(graphics->dirDraw->GetVerticalBlankStatus(&vb) >= 0 && vb) {}
-			n = f->getSurface()->Flip(0, DDFLIP_WAIT);
-		}
-		else {
-			n = f->getSurface()->Flip(0, DDFLIP_NOVSYNC | DDFLIP_WAIT);
-		}
-		if(n >= 0) return;
-		debugLog(("Flip Failed! Return code:" + itoa(n & 0x7fff)).c_str());
-		break;
-}
-
-	}
+	gxAudio_UpdateStreams();
 
 	if (!graphics || !d3dDevice) return;
 
@@ -422,19 +393,19 @@ switch(gfx_mode) {
 void gxRuntime::moveMouse(int x, int y) {
 	POINT p;
 	RECT rect;
-	switch(gfx_mode) {
-		case GMODE_SCALED:
-			GetClientRect(hwnd, &rect);
-			x = x * (rect.right - rect.left) / graphics->getWidth();
-			y = y * (rect.bottom - rect.top) / graphics->getHeight();
-		case GMODE_FIXED:
-			p.x = x; p.y = y; ClientToScreen(hwnd, &p); x = p.x; y = p.y;
-			break;
-		case GMODE_EXCLUSIVE:
-			if(use_di) return;
-			break;
-		default:
-			return;
+	switch (gfx_mode) {
+	case GMODE_SCALED:
+		GetClientRect(hwnd, &rect);
+		x = x * (rect.right - rect.left) / graphics->getWidth();
+		y = y * (rect.bottom - rect.top) / graphics->getHeight();
+	case GMODE_FIXED:
+		p.x = x; p.y = y; ClientToScreen(hwnd, &p); x = p.x; y = p.y;
+		break;
+	case GMODE_EXCLUSIVE:
+		if (use_di) return;
+		break;
+	default:
+		return;
 	}
 	SetCursorPos(x, y);
 }
@@ -444,64 +415,64 @@ void gxRuntime::moveMouse(int x, int y) {
 /////////////////
 LRESULT gxRuntime::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
-	if(busy) {
+	if (busy) {
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 
 	PAINTSTRUCT ps;
 
 	//handle 'special' messages!
-	switch(msg) {
-		case WM_PAINT:
-			if(gfx_mode && !auto_suspend) {
-				if(!graphics->restore()) gfx_lost = true;
+	switch (msg) {
+	case WM_PAINT:
+		if (gfx_mode && !auto_suspend) {
+			if (!graphics->restore()) gfx_lost = true;
+		}
+		BeginPaint(hwnd, &ps);
+		paint();
+		EndPaint(hwnd, &ps);
+		return DefWindowProc(hwnd, msg, wparam, lparam);
+	case WM_ERASEBKGND:
+		return gfx_mode ? GMODE_SCALED : DefWindowProc(hwnd, msg, wparam, lparam);
+	case WM_CLOSE:
+		if (app_close.size()) {
+			int n = MessageBox(hwnd, app_close.c_str(), app_title.c_str(), MB_OKCANCEL | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST);
+			if (n != IDOK) return 0;
+		}
+		asyncEnd();
+		return 0;
+	case WM_SETCURSOR:
+		if (!suspended) {
+			if (gfx_mode == GMODE_EXCLUSIVE) {
+				SetCursor(0);
+				return 1;
 			}
-			BeginPaint(hwnd, &ps);
-			paint();
-			EndPaint(hwnd, &ps);
-			return DefWindowProc(hwnd, msg, wparam, lparam);
-		case WM_ERASEBKGND:
-			return gfx_mode ? GMODE_SCALED : DefWindowProc(hwnd, msg, wparam, lparam);
-		case WM_CLOSE:
-			if(app_close.size()) {
-				int n = MessageBox(hwnd, app_close.c_str(), app_title.c_str(), MB_OKCANCEL | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST);
-				if(n != IDOK) return 0;
-			}
-			asyncEnd();
-			return 0;
-		case WM_SETCURSOR:
-			if(!suspended) {
-				if(gfx_mode == GMODE_EXCLUSIVE) {
+			else if (!pointer_visible) {
+				POINT p;
+				GetCursorPos(&p);
+				ScreenToClient(hwnd, &p);
+				RECT r; GetClientRect(hwnd, &r);
+				if (p.x >= 0 && p.y >= 0 && p.x < r.right && p.y < r.bottom) {
 					SetCursor(0);
 					return 1;
 				}
-				else if(!pointer_visible) {
-					POINT p;
-					GetCursorPos(&p);
-					ScreenToClient(hwnd, &p);
-					RECT r; GetClientRect(hwnd, &r);
-					if(p.x >= 0 && p.y >= 0 && p.x < r.right && p.y < r.bottom) {
-						SetCursor(0);
-						return 1;
-					}
-				}
 			}
-			break;
-		case WM_ACTIVATEAPP:
-			if(auto_suspend) {
-				if(wparam) {
-					if(suspended) resume();
-				}
-				else {
-					if(!suspended) suspend();
-				}
+		}
+		break;
+	case WM_ACTIVATEAPP:
+		if (auto_suspend) {
+			if (wparam) {
+				if (suspended) resume();
 			}
-			break;
+			else {
+				if (!suspended) suspend();
+			}
+		}
+		break;
 	}
 
-	if(!input || suspended) return DefWindowProc(hwnd, msg, wparam, lparam);
+	if (!input || suspended) return DefWindowProc(hwnd, msg, wparam, lparam);
 
-	if(gfx_mode == GMODE_EXCLUSIVE && use_di) {
+	if (gfx_mode == GMODE_EXCLUSIVE && use_di) {
 		use_di = input->acquire();
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
@@ -509,80 +480,80 @@ LRESULT gxRuntime::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	static const int MK_ALLBUTTONS = MK_LBUTTON | MK_RBUTTON | MK_MBUTTON;
 
 	//handle input messages
-	switch(msg) {
-		case WM_LBUTTONDOWN:
-			input->wm_mousedown(1);
-			SetCapture(hwnd);
-			break;
-		case WM_LBUTTONUP:
-			input->wm_mouseup(1);
-			if(!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
-			break;
-		case WM_RBUTTONDOWN:
-			input->wm_mousedown(2);
-			SetCapture(hwnd);
-			break;
-		case WM_RBUTTONUP:
-			input->wm_mouseup(2);
-			if(!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
-			break;
-		case WM_MBUTTONDOWN:
-			input->wm_mousedown(3);
-			SetCapture(hwnd);
-			break;
-		case WM_XBUTTONDOWN:
-			if (HIWORD(wparam) == XBUTTON1) input->wm_mousedown(5); // don't ask me why
-			else if (HIWORD(wparam) == XBUTTON2) input->wm_mousedown(4);
-			SetCapture(hwnd);
-			break;
-		case WM_XBUTTONUP:
-			if (HIWORD(wparam) == XBUTTON1) input->wm_mouseup(5);
-			else if (HIWORD(wparam) == XBUTTON2) input->wm_mouseup(4);
-			if (!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
-			break;
-		case WM_MBUTTONUP:
-			input->wm_mouseup(3);
-			if(!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
-			break;
-		case WM_MOUSEMOVE:
-			if(!graphics) break;
-			if(gfx_mode == GMODE_EXCLUSIVE && !use_di) {
-				POINT p; GetCursorPos(&p);
-				input->wm_mousemove(p.x, p.y);
+	switch (msg) {
+	case WM_LBUTTONDOWN:
+		input->wm_mousedown(1);
+		SetCapture(hwnd);
+		break;
+	case WM_LBUTTONUP:
+		input->wm_mouseup(1);
+		if (!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
+		break;
+	case WM_RBUTTONDOWN:
+		input->wm_mousedown(2);
+		SetCapture(hwnd);
+		break;
+	case WM_RBUTTONUP:
+		input->wm_mouseup(2);
+		if (!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
+		break;
+	case WM_MBUTTONDOWN:
+		input->wm_mousedown(3);
+		SetCapture(hwnd);
+		break;
+	case WM_XBUTTONDOWN:
+		if (HIWORD(wparam) == XBUTTON1) input->wm_mousedown(5); // don't ask me why
+		else if (HIWORD(wparam) == XBUTTON2) input->wm_mousedown(4);
+		SetCapture(hwnd);
+		break;
+	case WM_XBUTTONUP:
+		if (HIWORD(wparam) == XBUTTON1) input->wm_mouseup(5);
+		else if (HIWORD(wparam) == XBUTTON2) input->wm_mouseup(4);
+		if (!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
+		break;
+	case WM_MBUTTONUP:
+		input->wm_mouseup(3);
+		if (!(wparam & MK_ALLBUTTONS)) ReleaseCapture();
+		break;
+	case WM_MOUSEMOVE:
+		if (!graphics) break;
+		if (gfx_mode == GMODE_EXCLUSIVE && !use_di) {
+			POINT p; GetCursorPos(&p);
+			input->wm_mousemove(p.x, p.y);
+		}
+		else {
+			int x = (short)(lparam & 0xffff), y = lparam >> 16;
+			if (gfx_mode == GMODE_SCALED) {
+				RECT rect; GetClientRect(hwnd, &rect);
+				x = x * graphics->getWidth() / (rect.right - rect.left);
+				y = y * graphics->getHeight() / (rect.bottom - rect.top);
 			}
-			else {
-				int x = (short)(lparam & 0xffff), y = lparam >> 16;
-				if(gfx_mode == GMODE_SCALED) {
-					RECT rect; GetClientRect(hwnd, &rect);
-					x = x * graphics->getWidth() / (rect.right - rect.left);
-					y = y * graphics->getHeight() / (rect.bottom - rect.top);
-				}
-				if(x < 0) x = 0;
-				else if(x >= graphics->getWidth()) x = graphics->getWidth() - 1;
-				if(y < 0) y = 0;
-				else if(y >= graphics->getHeight()) y = graphics->getHeight() - 1;
-				input->wm_mousemove(x, y);
-			}
-			break;
-		case WM_MOUSEWHEEL:
-			input->wm_mousewheel((short)HIWORD(wparam));
-			break;
-		case WM_KEYDOWN:case WM_SYSKEYDOWN:
-			if(lparam & 0x40000000) break;
-			if(int n = ((lparam >> 17) & 0x80) | ((lparam >> 16) & 0x7f)) input->wm_keydown(n);
-			break;
-		case WM_KEYUP:case WM_SYSKEYUP:
-			if(int n = ((lparam >> 17) & 0x80) | ((lparam >> 16) & 0x7f)) input->wm_keyup(n);
-			break;
-		default:
-			return DefWindowProc(hwnd, msg, wparam, lparam);
+			if (x < 0) x = 0;
+			else if (x >= graphics->getWidth()) x = graphics->getWidth() - 1;
+			if (y < 0) y = 0;
+			else if (y >= graphics->getHeight()) y = graphics->getHeight() - 1;
+			input->wm_mousemove(x, y);
+		}
+		break;
+	case WM_MOUSEWHEEL:
+		input->wm_mousewheel((short)HIWORD(wparam));
+		break;
+	case WM_KEYDOWN:case WM_SYSKEYDOWN:
+		if (lparam & 0x40000000) break;
+		if (int n = ((lparam >> 17) & 0x80) | ((lparam >> 16) & 0x7f)) input->wm_keydown(n);
+		break;
+	case WM_KEYUP:case WM_SYSKEYUP:
+		if (int n = ((lparam >> 17) & 0x80) | ((lparam >> 16) & 0x7f)) input->wm_keyup(n);
+		break;
+	default:
+		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 
 	return 0;
 }
 
 static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-	if(runtime) return runtime->windowProc(hwnd, msg, wparam, lparam);
+	if (runtime) return runtime->windowProc(hwnd, msg, wparam, lparam);
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
@@ -619,32 +590,32 @@ bool gxRuntime::idle() {
 		return false;
 	}
 
-	for(;;) {
+	for (;;) {
 		MSG msg;
 		BOOL success = 0;
-		if(suspended && run_flag) {
+		if (suspended && run_flag) {
 			success = GetMessageW(&msg, 0, 0, 0);
 		}
 		else {
-			if(!PeekMessageW(&msg, 0, 0, 0, PM_REMOVE)) return run_flag;
+			if (!PeekMessageW(&msg, 0, 0, 0, PM_REMOVE)) return run_flag;
 		}
-		switch(msg.message) {
-			case WM_STOP:
-				if(!suspended) forceSuspend();
-				break;
-			case WM_RUN:
-				if(suspended) forceResume();
-				break;
-			case WM_END:
-				debugger = 0;
-				run_flag = false;
-				break;
-			case WM_CHAR:
-				input->wm_char(msg.wParam, msg.lParam);
-				break;
-			default:
-				TranslateMessage(&msg);
-				DispatchMessageW(&msg);
+		switch (msg.message) {
+		case WM_STOP:
+			if (!suspended) forceSuspend();
+			break;
+		case WM_RUN:
+			if (suspended) forceResume();
+			break;
+		case WM_END:
+			debugger = 0;
+			run_flag = false;
+			break;
+		case WM_CHAR:
+			input->wm_char(msg.wParam, msg.lParam);
+			break;
+		default:
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
 		}
 	}
 	return run_flag;
@@ -655,11 +626,11 @@ bool gxRuntime::idle() {
 ///////////
 bool gxRuntime::delay(int ms) {
 	int t = timeGetTime() + ms;
-	for(;;) {
-		if(!idle()) return false;
+	for (;;) {
+		if (!idle()) return false;
 		int d = t - timeGetTime();	//how long left to wait
-		if(d <= 0) return true;
-		if(d > 100) d = 100;
+		if (d <= 0) return true;
+		if (d > 100) d = 100;
 		Sleep(d);
 	}
 }
@@ -675,31 +646,31 @@ bool gxRuntime::debugStmt(int pos, const char* file) {
 // DEBUGSTOP //
 ///////////////
 void gxRuntime::debugStop() {
-	if(!suspended) forceSuspend();
+	if (!suspended) forceSuspend();
 }
 
 ////////////////
 // DEBUGENTER //
 ////////////////
 void gxRuntime::debugEnter(void* frame, void* env, const char* func) {
-	if(debugger) debugger->debugEnter(frame, env, func);
+	if (debugger) debugger->debugEnter(frame, env, func);
 }
 
 ////////////////
 // DEBUGLEAVE //
 ////////////////
 void gxRuntime::debugLeave() {
-	if(debugger) debugger->debugLeave();
+	if (debugger) debugger->debugLeave();
 }
 
 ////////////////
 // DEBUGERROR //
 ////////////////
 void gxRuntime::debugError(const char* t) {
-	if(!debugger) return;
+	if (!debugger) return;
 	Debugger* d = debugger;
 	asyncEnd();
-	if(!suspended) {
+	if (!suspended) {
 		forceSuspend();
 	}
 	d->debugMsg(UTF8::convertToUtf8(t).c_str(), true);
@@ -709,10 +680,10 @@ void gxRuntime::debugError(const char* t) {
 // DEBUGINFO //
 ///////////////
 void gxRuntime::debugInfo(const char* t) {
-	if(!debugger) return;
+	if (!debugger) return;
 	Debugger* d = debugger;
 	asyncEnd();
-	if(!suspended) {
+	if (!suspended) {
 		forceSuspend();
 	}
 	d->debugMsg(UTF8::convertToUtf8(t).c_str(), false);
@@ -722,7 +693,7 @@ void gxRuntime::debugInfo(const char* t) {
 // DEBUGLOG //
 //////////////
 void gxRuntime::debugLog(const char* t) {
-	if(debugger) debugger->debugLog(t);
+	if (debugger) debugger->debugLog(t);
 }
 
 /////////////////////////
@@ -737,27 +708,27 @@ std::string gxRuntime::commandLine() {
 /////////////
 bool gxRuntime::execute(const std::string& cmd_line) {
 
-	if(!cmd_line.size()) return false;
+	if (!cmd_line.size()) return false;
 
 	//convert cmd_line to cmd and params
 	std::string cmd = cmd_line, params;
-	while(cmd.size() && cmd[0] == ' ') cmd = cmd.substr(1);
-	if(cmd.find('\"') == 0) {
+	while (cmd.size() && cmd[0] == ' ') cmd = cmd.substr(1);
+	if (cmd.find('\"') == 0) {
 		int n = cmd.find('\"', 1);
-		if(n != std::string::npos) {
+		if (n != std::string::npos) {
 			params = cmd.substr(n + 1);
 			cmd = cmd.substr(1, n - 1);
 		}
 	}
 	else {
 		int n = cmd.find(' ');
-		if(n != std::string::npos) {
+		if (n != std::string::npos) {
 			params = cmd.substr(n + 1);
 			cmd = cmd.substr(0, n);
 		}
 	}
-	while(params.size() && params[0] == ' ') params = params.substr(1);
-	while(params.size() && params[params.size() - 1] == ' ') params = params.substr(0, params.size() - 1);
+	while (params.size() && params[0] == ' ') params = params.substr(1);
+	while (params.size() && params[params.size() - 1] == ' ') params = params.substr(0, params.size() - 1);
 
 	SetForegroundWindow(GetDesktopWindow());
 	return (int)ShellExecute(GetDesktopWindow(), 0, cmd.c_str(), params.size() ? params.c_str() : 0, 0, SW_SHOW) > 32;
@@ -807,10 +778,10 @@ int gxRuntime::getAvailVirtual() {
 // POINTER VISIBLE //
 /////////////////////
 void gxRuntime::setPointerVisible(bool vis) {
-	if(pointer_visible == vis) return;
+	if (pointer_visible == vis) return;
 
 	pointer_visible = vis;
-	if(gfx_mode == GMODE_EXCLUSIVE) return;
+	if (gfx_mode == GMODE_EXCLUSIVE) return;
 
 	//force a WM_SETCURSOR
 	POINT pt;
@@ -834,7 +805,7 @@ gxAudio* gxRuntime::openAudio(int /*flags*/) {
 }
 
 void gxRuntime::closeAudio(gxAudio* a) {
-	if(!audio || audio != a) return;
+	if (!audio || audio != a) return;
 	delete audio;
 	audio = 0;
 }
@@ -843,10 +814,10 @@ void gxRuntime::closeAudio(gxAudio* a) {
 // INPUT SETUP //
 /////////////////
 gxInput* gxRuntime::openInput(int flags) {
-	if(input) return 0;
+	if (input) return 0;
 
 	IDirectInput8* di;
-	if(DirectInput8Create(hinst, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&di, 0) >= 0) {
+	if (DirectInput8Create(hinst, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&di, 0) >= 0) {
 		input = new gxInput(this, di);
 		acquireInput();
 	}
@@ -857,7 +828,7 @@ gxInput* gxRuntime::openInput(int flags) {
 }
 
 void gxRuntime::closeInput(gxInput* i) {
-	if(!input || input != i) return;
+	if (!input || input != i) return;
 	unacquireInput();
 	delete input;
 	input = 0;
@@ -1160,14 +1131,14 @@ int gxRuntime::desktopHeight() {
 }
 
 gxFileSystem* gxRuntime::openFileSystem(int flags) {
-	if(fileSystem) return 0;
+	if (fileSystem) return 0;
 
 	fileSystem = new gxFileSystem();
 	return fileSystem;
 }
 
 void gxRuntime::closeFileSystem(gxFileSystem* f) {
-	if(!fileSystem || fileSystem != f) return;
+	if (!fileSystem || fileSystem != f) return;
 
 	delete fileSystem;
 	fileSystem = 0;
@@ -1212,7 +1183,7 @@ void gxRuntime::denumGfx() {
 }
 
 int gxRuntime::numGraphicsDrivers() {
-	if(!enum_all) {
+	if (!enum_all) {
 		enum_all = true;
 		enumGfx();
 	}
@@ -1255,36 +1226,36 @@ gxTimer* gxRuntime::createTimer(int hertz) {
 }
 
 void gxRuntime::freeTimer(gxTimer* t) {
-	if(!timers.count(t)) return;
+	if (!timers.count(t)) return;
 	timers.erase(t);
 	delete t;
 }
 
 static std::string toDir(std::string t) {
-	if(t.size() && t[t.size() - 1] != '\\') t += '\\';
+	if (t.size() && t[t.size() - 1] != '\\') t += '\\';
 	return t;
 }
 
 std::string gxRuntime::systemProperty(const std::string& p) {
 	char buff[MAX_PATH + 1];
 	std::string t = tolower(p);
-	if(t == "os") {
-		switch(osinfo.dwMajorVersion) {
-			case 6:
-				switch(osinfo.dwMinorVersion) {
-					case 0:return "Windows Vista";
-					case 1:return "Windows 7";
-					case 2:return "Windows 8";
-					case 3:return "Windows 8.1";
-				}
-				break;
-			case 10:
-				if(osinfo.dwBuildNumber >= 22000) return "Windows 11";
-				return "Windows 10";
-				break;
+	if (t == "os") {
+		switch (osinfo.dwMajorVersion) {
+		case 6:
+			switch (osinfo.dwMinorVersion) {
+			case 0:return "Windows Vista";
+			case 1:return "Windows 7";
+			case 2:return "Windows 8";
+			case 3:return "Windows 8.1";
+			}
+			break;
+		case 10:
+			if (osinfo.dwBuildNumber >= 22000) return "Windows 11";
+			return "Windows 10";
+			break;
 		}
 	}
-	else if(t == "cpuname") {
+	else if (t == "cpuname") {
 		//Uses the __cpuid intrinsic to get the brand name.
 		//-------RESOURCES-------
 		//https://en.wikipedia.org/wiki/CPUID#EAX=80000002h,80000003h,80000004h:_Processor_Brand_String
@@ -1297,7 +1268,7 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 		__cpuid((int*)regs, 0x80000000);
 		numberOfExtendedFlags = regs[0];
 
-		if(numberOfExtendedFlags >= 0x80000004) {
+		if (numberOfExtendedFlags >= 0x80000004) {
 			__cpuid((int*)regs, 0x80000002);
 			cpuBrand += std::string((const char*)&regs[0], 4);
 			cpuBrand += std::string((const char*)&regs[1], 4);
@@ -1320,64 +1291,64 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 
 		return cpuBrand;
 	}
-	else if(t == "cpuarch") {
+	else if (t == "cpuarch") {
 		SYSTEM_INFO systemInfo;
 		GetNativeSystemInfo(&systemInfo);
 
-		switch(systemInfo.wProcessorArchitecture) {
-			case PROCESSOR_ARCHITECTURE_AMD64:
-				return "AMD64";
-			case PROCESSOR_ARCHITECTURE_INTEL:
-				return "x86";
-				//Maybe someone runs the game under the x86 emulation layers of ARM Windows, detect it.
-			case PROCESSOR_ARCHITECTURE_ARM:
-				return "ARM32";
-			case PROCESSOR_ARCHITECTURE_ARM64:
-				return "ARM64";
-				//-------------------------------------------------------------------------------------
-			default:
-				return "Unknown";
+		switch (systemInfo.wProcessorArchitecture) {
+		case PROCESSOR_ARCHITECTURE_AMD64:
+			return "AMD64";
+		case PROCESSOR_ARCHITECTURE_INTEL:
+			return "x86";
+			//Maybe someone runs the game under the x86 emulation layers of ARM Windows, detect it.
+		case PROCESSOR_ARCHITECTURE_ARM:
+			return "ARM32";
+		case PROCESSOR_ARCHITECTURE_ARM64:
+			return "ARM64";
+			//-------------------------------------------------------------------------------------
+		default:
+			return "Unknown";
 		}
 	}
-	else if(t == "osbuild") {
+	else if (t == "osbuild") {
 		return itoa((int)osinfo.dwBuildNumber);
 	}
-	else if(t == "appdir") {
-		if(GetModuleFileName(0, buff, MAX_PATH)) {
+	else if (t == "appdir") {
+		if (GetModuleFileName(0, buff, MAX_PATH)) {
 			std::string t = buff;
 			int n = t.find_last_of('\\');
-			if(n != std::string::npos) t = t.substr(0, n);
+			if (n != std::string::npos) t = t.substr(0, n);
 			return toDir(t);
 		}
 	}
-	else if(t == "appfile") {
-		if(GetModuleFileName(0, buff, MAX_PATH)) return buff;
+	else if (t == "appfile") {
+		if (GetModuleFileName(0, buff, MAX_PATH)) return buff;
 	}
-	else if(t == "apphwnd") {
+	else if (t == "apphwnd") {
 		return itoa((int)hwnd);
 	}
-	else if(t == "apphinstance") {
+	else if (t == "apphinstance") {
 		return itoa((int)hinst);
 	}
-	else if(t == "windowsdir") {
-		if(GetWindowsDirectory(buff, MAX_PATH)) return toDir(buff);
+	else if (t == "windowsdir") {
+		if (GetWindowsDirectory(buff, MAX_PATH)) return toDir(buff);
 	}
-	else if(t == "systemdir") {
-		if(GetSystemDirectory(buff, MAX_PATH)) return toDir(buff);
+	else if (t == "systemdir") {
+		if (GetSystemDirectory(buff, MAX_PATH)) return toDir(buff);
 	}
-	else if(t == "tempdir") {
-		if(GetTempPath(MAX_PATH, buff)) return toDir(buff);
+	else if (t == "tempdir") {
+		if (GetTempPath(MAX_PATH, buff)) return toDir(buff);
 	}
-	else if(t == "direct3d8") {
-		if(graphics) return itoa((int)graphics->dir3d);
+	else if (t == "direct3d8") {
+		if (graphics) return itoa((int)graphics->dir3d);
 	}
-	else if(t == "direct3ddevice8") {
-		if(graphics) return itoa((int)graphics->dir3dDev);
+	else if (t == "direct3ddevice8") {
+		if (graphics) return itoa((int)graphics->dir3dDev);
 	}
-	else if(t == "directinput7") {
-		if(input) return itoa((int)input->dirInput);
+	else if (t == "directinput7") {
+		if (input) return itoa((int)input->dirInput);
 	}
-	else if(t == "blitzversion") {
+	else if (t == "blitzversion") {
 		return itoa((VERSION & 0xffff) / 1000) + "." + itoa((VERSION & 0xffff) % 1000);
 	}
 	return "";
@@ -1393,7 +1364,7 @@ void gxRuntime::calculateDPI() {
 }
 
 void gxRuntime::enableDirectInput(bool enable) {
-	if(use_di = enable) {
+	if (use_di = enable) {
 		acquireInput();
 	}
 	else {
@@ -1405,9 +1376,9 @@ int gxRuntime::callDll(const std::string& dll, const std::string& func, const vo
 
 	std::map<std::string, gxDll*>::const_iterator lib_it = libs.find(dll);
 
-	if(lib_it == libs.end()) {
+	if (lib_it == libs.end()) {
 		HINSTANCE h = LoadLibrary(dll.c_str());
-		if(!h) return 0;
+		if (!h) return 0;
 		gxDll* t = new gxDll;
 		t->hinst = h;
 		lib_it = libs.insert(make_pair(dll, t)).first;
@@ -1416,9 +1387,9 @@ int gxRuntime::callDll(const std::string& dll, const std::string& func, const vo
 	gxDll* t = lib_it->second;
 	std::map<std::string, LibFunc>::const_iterator fun_it = t->funcs.find(func);
 
-	if(fun_it == t->funcs.end()) {
+	if (fun_it == t->funcs.end()) {
 		LibFunc f = (LibFunc)GetProcAddress(t->hinst, func.c_str());
-		if(!f) return 0;
+		if (!f) return 0;
 		fun_it = t->funcs.insert(make_pair(func, f)).first;
 	}
 
