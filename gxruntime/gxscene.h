@@ -7,132 +7,79 @@
 
 #include "gxlight.h"
 #include "gxeffect.h"
+#include "../gfx/gfxscene.h"
 
-class gxCanvas;
+class gxCanvasD3D9;
 
-class gxMesh;
-class gxLight;
-class gxGraphics;
+class gxMeshD3D9;
+class gxLightD3D9;
+class gxGraphicsD3D9;
 class gxTexture;
-class gxEffect;
+class gxEffectD3D9;
 
-class gxScene {
+class gxSceneD3D9 : public gxScene {
 public:
-	gxGraphics* graphics;
+	gxGraphicsD3D9* graphics;
 	IDirect3DDevice9Ex* dir3dDev;
 
-	gxScene(gxGraphics* graphics, gxCanvas* target);
-	~gxScene();
+	gxSceneD3D9(gxGraphicsD3D9* graphics, gxCanvasD3D9* target);
+	~gxSceneD3D9();
 
 
 	/***** GX INTERFACE *****/
 public:
-	enum {
-		MAX_TEXTURES = 8
-	};
-	enum {
-		FX_FULLBRIGHT = 0x0001,
-		FX_VERTEXCOLOR = 0x0002,
-		FX_FLATSHADED = 0x0004,
-		FX_NOFOG = 0x0008,
-		FX_DOUBLESIDED = 0x0010,
-		FX_VERTEXALPHA = 0x0020,
-		FX_WIREFRAME = 0x0040,
-
-		FX_ALPHATEST = 0x2000,
-		FX_CONDLIGHT = 0x4000,
-		FX_EMISSIVE = 0x8000
-	};
-	enum {
-		BLEND_REPLACE = 0,
-		BLEND_ALPHA = 1,
-		BLEND_MULTIPLY = 2,
-		BLEND_ADD = 3,
-		BLEND_DOT3 = 4,
-		BLEND_MULTIPLY2 = 5,
-		BLEND_BUMPENVMAP = 6,
-	};
-	enum {
-		ZMODE_NORMAL = 0,
-		ZMODE_DISABLE = 1,
-		ZMODE_CMPONLY = 2
-	};
-	enum {
-		FOG_NONE = 0,
-		FOG_LINEAR = 1,
-		FOG_EXP = 2,
-		FOG_EXP2 = 3,
-	};
-	enum {
-		TEX_COORDS2 = 0x0001
-	};
-	struct Matrix {
-		float elements[4][3];
-	};
-	struct RenderState {
-		float color[3];
-		float shininess, alpha;
-		int blend, fx;
-		struct TexState {
-			gxCanvas* canvas;
-			const Matrix* matrix;
-			int blend, flags;
-			DWORD bumpEnvMat[2][2];
-			DWORD bumpEnvScale;
-			DWORD bumpEnvOffset;
-		}tex_states[MAX_TEXTURES];
-		gxEffect* effect;
-	};
-
 	//state
-	int  hwTexUnits();
-	int  gfxDriverCaps3D();
+	int  hwTexUnits() override;
+	int  gfxDriverCaps3D() override;
 
-	void setWBuffer(bool enable);
-	void setHWMultiTex(bool enable);
-	void setDither(bool enable);
-	void setAntialias(bool enable);
-	void setWireframe(bool enable);
-	void setFlippedTris(bool enable);
-	void setAmbient(const float rgb[]);
-	void setAmbient2(const float rgb[]);
-	void setFogColor(const float rgb[3]);
-	void setFogRange(float nr, float fr);
-	void setFogDensity(float den);
-	void setFogMode(int mode);
-	void setZMode(int mode);
-	void setViewport(int x, int y, int w, int h);
-	void setOrthoProj(float nr, float fr, float nr_w, float nr_h);
-	void setPerspProj(float nr, float fr, float nr_w, float nr_h);
-	void setViewMatrix(const Matrix* matrix);
-	void setWorldMatrix(const Matrix* matrix);
-	void setEyePosition(const float pos[3]);
-	void setRenderState(const RenderState& state);
-	void setEffect(gxEffect* effect);
-	void setDepthTarget(gxCanvas* c) { depthTarget = c; }
-	void setBumpNormalize(bool enable) { bumpNormalize = enable; }
+	void setWBuffer(bool enable) override;
+	void setHWMultiTex(bool enable) override;
+	void setDither(bool enable) override;
+	void setAntialias(bool enable) override;
+	void setWireframe(bool enable) override;
+	void setFlippedTris(bool enable) override;
+	void setAmbient(const float rgb[]) override;
+	void setAmbient2(const float rgb[]) override;
+	void setFogColor(const float rgb[3]) override;
+	void setFogRange(float nr, float fr) override;
+	void setFogDensity(float den) override;
+	void setFogMode(int mode) override;
+	void setZMode(int mode) override;
+	void setViewport(int x, int y, int w, int h) override;
+	void setOrthoProj(float nr, float fr, float nr_w, float nr_h) override;
+	void setPerspProj(float nr, float fr, float nr_w, float nr_h) override;
+	void setViewMatrix(const Matrix* matrix) override;
+	void setWorldMatrix(const Matrix* matrix) override;
+	void setEyePosition(const float pos[3]) override;
+	void setRenderState(const RenderState& state) override;
+	void setEffect(gxEffect* effect) override;
+	void setDepthTarget(gxCanvas* c) override;
+	void setBumpNormalize(bool enable) override { bumpNormalize = enable; }
+
+	void setTextureLodBias(float bias) override { textureLodBias = *((DWORD*)&bias); }
+	void setTextureAnisotropic(int level) override { textureAnisotropic = level; }
 
 	//rendering
-	bool begin(const std::vector<gxLight*>& lights);
-	void clear(const float rgb[3], float alpha, float z, bool clear_argb, bool clear_z);
-	void render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt);
-	void renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt);
-	void end();
+	bool begin(const std::vector<gxLight*>& lights) override;
+	void clear(const float rgb[3], float alpha, float z, bool clear_argb, bool clear_z) override;
+	void render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt) override;
+	void renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt) override;
+	void end() override;
 
 	//lighting
-	gxLight* createLight(int flags);
-	void freeLight(gxLight* l);
+	gxLight* createLight(int flags) override;
+	void freeLight(gxLight* l) override;
 
 	//info
-	int getTrianglesDrawn()const;
-	gxEffect* getEffect() const;
+	int getTrianglesDrawn()const override;
+	gxEffect* getEffect() const override;
 
+private:
 	DWORD textureLodBias;
 	int textureAnisotropic;
 
-private:
-	gxCanvas* target;
-	gxCanvas* depthTarget = nullptr;
+	gxCanvasD3D9* target;
+	gxCanvasD3D9* depthTarget = nullptr;
 	bool wbuffer, dither, antialias, wireframe, flipped;
 	unsigned ambient, ambient2, fogcolor;
 	int caps_level, fogmode, zmode, max_lights;
@@ -146,7 +93,7 @@ private:
 	float shininess;
 	int blend, fx;
 	struct TexState {
-		gxCanvas* canvas;
+		gxCanvasD3D9* canvas;
 		int blend, flags;
 		DWORD bumpEnvMat[2][2];
 		DWORD bumpEnvScale;
@@ -157,15 +104,15 @@ private:
 	TexState texstate[MAX_TEXTURES];
 	int n_texs, tris_drawn;
 
-	gxEffect* currentEffect;
+	gxEffectD3D9* currentEffect;
 	D3DXMATRIX currentWorld, currentView, currentProj;
 	float eyePos[3];
 
 	bool bumpNormalize = false;
 	float bumpUniformScale = 1.0f;
 
-	std::set<gxLight*> _allLights;
-	std::vector<gxLight*> _curLights;
+	std::set<gxLightD3D9*> _allLights;
+	std::vector<gxLightD3D9*> _curLights;
 
 	int d3d_rs[160];
 	int d3d_tss[8][32];
@@ -188,7 +135,7 @@ private:
 	void setFogMode();
 	void setTriCull();
 	void setTexState(int index, const TexState& state, bool set_blend);
-	void setEffectInternal(gxEffect* e);
+	void setEffectInternal(gxEffectD3D9* e);
 	void setSkinShaderConstants();
 };
 

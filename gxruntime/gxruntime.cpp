@@ -335,7 +335,7 @@ void gxRuntime::paint() {
 	switch (gfx_mode) {
 	case GMODE_SCALED: {
 		if (!graphics) break;
-		gxCanvas* f = graphics->getFrontCanvas();
+		gxCanvasD3D9* f = graphics->getFrontCanvas();
 		if (!f) break;
 		IDirect3DSurface9* canvasSurf = f->getSurface();
 		if (!canvasSurf) break;
@@ -354,7 +354,7 @@ void gxRuntime::paint() {
 	}
 	case GMODE_FIXED: {
 		if (!graphics) break;
-		gxCanvas* f = graphics->getFrontCanvas();
+		gxCanvasD3D9* f = graphics->getFrontCanvas();
 		if (!f) break;
 		IDirect3DSurface9* canvasSurf = f->getSurface();
 		if (!canvasSurf) break;
@@ -913,7 +913,7 @@ static void CALLBACK timerCallback(UINT, UINT, DWORD, DWORD, DWORD) {
 	HWND target = NULL;
 	EnterCriticalSection(&g_gfxCS);
 	if (gfx_mode && runtime && runtime->graphics) {
-		gxCanvas* f = runtime->graphics->getFrontCanvas();
+		gxCanvasD3D9* f = runtime->graphics->getFrontCanvas();
 		if (f && f->getModify() != mod_cnt) {
 			mod_cnt = f->getModify();
 			post = true;
@@ -982,7 +982,7 @@ void gxRuntime::applyAntialiasToParams(D3DPRESENT_PARAMETERS& pp) {
 	pp.Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 }
 
-gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
+gxGraphicsD3D9* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	if (!d3d) return 0;
 
 	ZeroMemory(&d3dpp, sizeof(d3dpp));
@@ -1019,10 +1019,10 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 		timerID = 0;
 	}
 
-	return new gxGraphics(this, d3dDevice, frontBuffer, backBuffer, d3d);
+	return new gxGraphicsD3D9(this, d3dDevice, frontBuffer, backBuffer, d3d);
 }
 
-gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
+gxGraphicsD3D9* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	if (!d3d) return 0;
 
 	D3DFORMAT format;
@@ -1077,7 +1077,7 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	frontBuffer = backBuffer;
 	frontBuffer->AddRef();
 
-	return new gxGraphics(this, d3dDevice, frontBuffer, backBuffer, d3d);
+	return new gxGraphicsD3D9(this, d3dDevice, frontBuffer, backBuffer, d3d);
 }
 
 gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) {
@@ -1180,7 +1180,8 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 	return graphics;
 }
 
-void gxRuntime::closeGraphics(gxGraphics* g) {
+void gxRuntime::closeGraphics(gxGraphics* gb) {
+	gxGraphicsD3D9* g = static_cast<gxGraphicsD3D9*>(gb);
 	if (!graphics || graphics != g) return;
 	auto_suspend = false;
 	busy = true;
@@ -1197,7 +1198,7 @@ void gxRuntime::closeGraphics(gxGraphics* g) {
 		frontBuffer = 0;
 	}
 	EnterCriticalSection(&g_gfxCS);
-	gxGraphics* old_graphics = graphics;
+	gxGraphicsD3D9* old_graphics = graphics;
 	graphics = 0;
 	LeaveCriticalSection(&g_gfxCS);
 

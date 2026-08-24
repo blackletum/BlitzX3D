@@ -295,7 +295,7 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
     if (src_readback) src_readback->Release();
 }
 
-IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, int flags, gxGraphics* gfx) {
+IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, int flags, gxGraphicsD3D9* gfx) {
     IDirect3DSurface9* surf = nullptr;
     D3DFORMAT format = (flags & (gxCanvas::CANVAS_TEX_ALPHA | gxCanvas::CANVAS_TEX_MASK))
         ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
@@ -303,11 +303,11 @@ IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, int flags, gxGraph
     return surf;
 }
 
-IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
+IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphicsD3D9* gfx) {
     return createTextureSurface(w, h, flags, gfx, false);
 }
 
-IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx, bool renderTarget) {
+IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphicsD3D9* gfx, bool renderTarget) {
     IDirect3DDevice9* dev = gfx->dir3dDev;
     if (!dev) return nullptr;
     adjustTexSize(&w, &h, dev);
@@ -341,7 +341,7 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     return tex;
 }
 
-IDirect3DCubeTexture9* ddUtil::createCubeTextureSurface(int size, int flags, gxGraphics* gfx) {
+IDirect3DCubeTexture9* ddUtil::createCubeTextureSurface(int size, int flags, gxGraphicsD3D9* gfx) {
     IDirect3DDevice9* dev = gfx->dir3dDev;
     if (!dev) return nullptr;
 
@@ -387,7 +387,7 @@ static void buildAlpha(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h, bool 
     }
 }
 
-IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags, gxGraphics* gfx) {
+IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags, gxGraphicsD3D9* gfx) {
     std::lock_guard<std::mutex> lock(g_freeimage_mutex);
     g_lastImageError.clear();
 
@@ -492,7 +492,7 @@ bool ddUtil::decodeImageFile(const std::string& file, void** out32, int* outW, i
 	return true;
 }
 
-static IDirect3DTexture9* textureFromDecodedUnlocked(void* vfib32, int w, int h, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
+static IDirect3DTexture9* textureFromDecodedUnlocked(void* vfib32, int w, int h, int flags, gxGraphicsD3D9* gfx, bool renderTarget, int* outW, int* outH) {
 	FIBITMAP* fib32 = (FIBITMAP*)vfib32;
 	int adjW = w, adjH = h;
 	adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
@@ -677,20 +677,20 @@ static IDirect3DTexture9* textureFromDecodedUnlocked(void* vfib32, int w, int h,
 	return tex;
 }
 
-IDirect3DTexture9* ddUtil::textureFromDecoded(void* vfib32, int w, int h, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
+IDirect3DTexture9* ddUtil::textureFromDecoded(void* vfib32, int w, int h, int flags, gxGraphicsD3D9* gfx, bool renderTarget, int* outW, int* outH) {
 	std::lock_guard<std::mutex> lock(g_freeimage_mutex);
 	return textureFromDecodedUnlocked(vfib32, w, h, flags, gfx, renderTarget, outW, outH);
 }
 
-IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphicsD3D9* gfx) {
     return loadTextureSurface(file, flags, gfx, false, nullptr, nullptr);
 }
 
-IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget) {
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphicsD3D9* gfx, bool renderTarget) {
     return loadTextureSurface(file, flags, gfx, renderTarget, nullptr, nullptr);
 }
 
-IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphicsD3D9* gfx, bool renderTarget, int* outW, int* outH) {
 	std::lock_guard<std::mutex> lock(g_freeimage_mutex);
 	g_lastImageError.clear();
 

@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <freetype/ftsynth.h>
 
-gxFont::gxFont(FT_Library ftLibrary, gxGraphics* gfx, const std::string& fn, int h, bool bold, bool italic, bool underlined) {
+gxFontD3D9::gxFontD3D9(FT_Library ftLibrary, gxGraphicsD3D9* gfx, const std::string& fn, int h, bool bold, bool italic, bool underlined) {
 	graphics = gfx;
 	filename = fn;
 	height = h;
@@ -51,7 +51,7 @@ gxFont::gxFont(FT_Library ftLibrary, gxGraphics* gfx, const std::string& fn, int
 	tempCanvas = nullptr;
 }
 
-gxFont::~gxFont() {
+gxFontD3D9::~gxFontD3D9() {
 	for(int i = 0; i < atlases.size(); i++) {
 		graphics->freeCanvas(atlases[i]);
 	}
@@ -62,7 +62,7 @@ gxFont::~gxFont() {
 const int transparentPixel = 0x4A412A;
 const int opaquePixel = 0xffffff;
 
-void gxFont::renderAtlas(int chr) {
+void gxFontD3D9::renderAtlas(int chr) {
 	bool needsNewAtlas = false;
 	int startChr = chr - 1024;
 	if (startChr < 0) startChr = 0;
@@ -156,7 +156,7 @@ void gxFont::renderAtlas(int chr) {
 	}
 
 	if (buffer != nullptr) {
-		gxCanvas* newAtlas = graphics->createCanvas(atlasDims, atlasDims, gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA);
+		gxCanvasD3D9* newAtlas = graphics->createCanvas(atlasDims, atlasDims, gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA);
 		newAtlas->backup();
 		newAtlas->lock();
 		for (int y = 0; y < atlasDims; ++y) {
@@ -176,7 +176,7 @@ void gxFont::renderAtlas(int chr) {
 	if (needsNewAtlas) renderAtlas(chr);
 }
 
-void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std::string& text) {
+void gxFontD3D9::render(gxCanvasD3D9* dest, unsigned color_argb, int x, int y, const std::string& text) {
 	int baselineY = y - glyphRenderOffset + glyphRenderBaseline;
 	int t_x = 0;
 
@@ -196,7 +196,7 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 				int dstX = x + t_x - gd.drawOffset[0];
 				int dstY = baselineY - gd.drawOffset[1];
 
-				gxCanvas* atlas = atlases[gd.atlasIndex];
+				gxCanvasD3D9* atlas = atlases[gd.atlasIndex];
 				bool filter = smooth;
 				dest->blitAlpha(dstX, dstY, atlas, gd.srcRect[0], gd.srcRect[1], gd.srcRect[2], gd.srcRect[3], color_argb, filter);
 			}
@@ -216,7 +216,7 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 	}
 }
 
-int gxFont::charWidth(int chr) {
+int gxFontD3D9::charWidth(int chr) {
 	std::unordered_map<int, GlyphData>::iterator it = glyphData.find(chr);
 	if(it == glyphData.end()) {
 		renderAtlas(chr);
@@ -225,7 +225,7 @@ int gxFont::charWidth(int chr) {
 	return it->second.srcRect[2];
 }
 
-int gxFont::charAdvance(int chr) {
+int gxFontD3D9::charAdvance(int chr) {
 	std::unordered_map<int, GlyphData>::iterator it = glyphData.find(chr);
 	if(it == glyphData.end()) {
 		renderAtlas(chr);
@@ -238,7 +238,7 @@ int gxFont::charAdvance(int chr) {
 	return adv;
 }
 
-int gxFont::stringWidth(const std::string& text) {
+int gxFontD3D9::stringWidth(const std::string& text) {
 	int width = 0;
 
 	for(int i = 0; i < text.size();) {
@@ -259,37 +259,37 @@ int gxFont::stringWidth(const std::string& text) {
 	return width;
 }
 
-int gxFont::getWidth()const {
+int gxFontD3D9::getWidth()const {
 	return maxWidth;
 }
 
-int gxFont::getHeight()const {
+int gxFontD3D9::getHeight()const {
 	return glyphHeight;
 }
 
-int gxFont::getRenderOffset()const {
+int gxFontD3D9::getRenderOffset()const {
 	return glyphRenderOffset;
 }
 
-int gxFont::getWidth(const std::string& text) {
+int gxFontD3D9::getWidth(const std::string& text) {
 	return stringWidth(text);
 }
 
-bool gxFont::isPrintable(int chr)const {
+bool gxFontD3D9::isPrintable(int chr)const {
 	return glyphData.find(chr) != glyphData.end();
 }
 
-float gxFont::getBaselinePosition() const
+float gxFontD3D9::getBaselinePosition() const
 {
 	return static_cast<float>(freeTypeFace->size->metrics.ascender) / 64.0F;
 }
 
-float gxFont::getUnderlinePosition()const
+float gxFontD3D9::getUnderlinePosition()const
 {
 	return -static_cast<float>(FT_MulFix(freeTypeFace->underline_position, freeTypeFace->size->metrics.y_scale)) / 64.0F;
 }
 
-float gxFont::getUnderlineThickness()const
+float gxFontD3D9::getUnderlineThickness()const
 {
 	return std::max(1.0F, static_cast<float>(FT_MulFix(freeTypeFace->underline_thickness, freeTypeFace->size->metrics.y_scale)) / 64.0F);
 }

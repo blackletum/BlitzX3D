@@ -1,7 +1,7 @@
 #include "std.h"
 #include "brush.h"
 
-#include "../gxruntime/gxgraphics.h"
+#include "../gfx/gfx.h"
 
 struct Brush::Rep {
 	union { int ref_cnt; Rep* next; };

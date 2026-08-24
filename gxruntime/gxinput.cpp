@@ -100,7 +100,7 @@ public:
         }
         DIMOUSESTATE2 state;
         if (device->GetDeviceState(sizeof(state), &state) < 0) return;
-        if (gxGraphics* g = input->runtime->graphics) {
+        if (gxGraphicsD3D9* g = input->runtime->graphics) {
             int mx = axis_states[0] + state.lX;
             int my = axis_states[1] + state.lY;
             if (mx < 0) mx = 0;

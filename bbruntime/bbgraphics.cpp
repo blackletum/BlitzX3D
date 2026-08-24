@@ -1083,7 +1083,7 @@ BBStr* bbConvertToUTF8(BBStr* str)
 }
 
 BBStr* bbGetTextureLoadError() {
-    return new BBStr(ddUtil::getLastImageError());
+    return new BBStr(gx_graphics->getLastImageError());
 }
 
 void bbCopyRect(int sx, int sy, int w, int h, int dx, int dy, gxCanvas* src, gxCanvas* dest)
@@ -1160,7 +1160,7 @@ int bbStringHeight(BBStr* str)
 }
 
 BBStr* bbFontPath(BBStr* facename) {
-    return new BBStr(gx_graphics->running_on_wine ? "" : UTF8::getSystemFontFile(facename->c_str()).c_str());
+    return new BBStr(gx_graphics->runningOnWine() ? "" : UTF8::getSystemFontFile(facename->c_str()).c_str());
 }
 
 gxMovie* bbOpenMovie(BBStr* s)
@@ -1212,7 +1212,7 @@ bbImage* bbLoadImage(BBStr* s)
     gxCanvas* c = gx_graphics->loadCanvas(path, 0);
     if (!c) {
         std::string errMsg = "Failed to load image: " + path;
-        const std::string& libErr = ddUtil::getLastImageError();
+        const std::string& libErr = gx_graphics->getLastImageError();
         if (!libErr.empty()) errMsg += " (" + libErr + ")";
         RTEX(errMsg.c_str());
     }
@@ -1239,7 +1239,7 @@ bbImage* bbLoadImageFlag(BBStr* s, int flags)
     gxCanvas* c = gx_graphics->loadCanvas(path, flags);
     if (!c) {
         std::string errMsg = "Failed to load image: " + path;
-        const std::string& libErr = ddUtil::getLastImageError();
+        const std::string& libErr = gx_graphics->getLastImageError();
         if (!libErr.empty()) errMsg += " (" + libErr + ")";
         RTEX(errMsg.c_str());
     }
@@ -1263,12 +1263,10 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     }
     delete s;
 
-    int srcFlags = ddUtil::hasActualAlpha(path) ? gxCanvas::CANVAS_TEX_ALPHA : 0;
+    int srcFlags = gx_graphics->imageHasAlpha(path) ? gxCanvas::CANVAS_TEX_ALPHA : 0;
 
-    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, srcFlags, gx_graphics, false);
-    if (!picTex) return 0;
-    gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE | srcFlags);
-    gx_graphics->adoptCanvas(pic);
+    gxCanvas* pic = gx_graphics->loadTextureCanvas(path, srcFlags, false, nullptr, nullptr);
+    if (!pic) return 0;
 
     int fpr = pic->getWidth() / w;
     int fpp = pic->getHeight() / h * fpr;
@@ -1282,14 +1280,12 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
 
     std::vector<gxCanvas*> frames;
     for (int k = 0; k < cnt; ++k) {
-        IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, gxCanvas::CANVAS_TEXTURE | srcFlags, gx_graphics, false);
-        if (!tex) {
+        gxCanvas* c = gx_graphics->createTextureCanvas(w, h, srcFlags, false);
+        if (!c) {
             for (int i = 0; i < k; ++i) gx_graphics->freeCanvas(frames[i]);
             gx_graphics->freeCanvas(pic);
             return 0;
         }
-        gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE | srcFlags);
-        gx_graphics->adoptCanvas(c);
 
         c->setLogicalSize(w, h);
 
@@ -1328,12 +1324,12 @@ Texture* bbLoadAnimTextureGrid(BBStr* file, int flags, int fw, int fh, int first
     }
 
     int imgW = 0, imgH = 0;
-    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, flags, gx_graphics, false, &imgW, &imgH);
-    if (!picTex) {
+    gxCanvas* picCanvas = gx_graphics->loadTextureCanvas(path, flags, false, &imgW, &imgH);
+    if (!picCanvas) {
         ErrorLog("LoadAnimTextureGrid", "Failed to load image");
         return nullptr;
     }
-    picTex->Release();
+    gx_graphics->freeCanvas(picCanvas);
 
     int frameW = fw;
     int frameH = fh;
@@ -1480,14 +1476,14 @@ void bbDrawImage(bbImage* i, int x, int y, int frame)
         int dh = (int)(h * i->drawScaleY + 0.5f);
         int shx = (int)(hx * i->drawScaleX + 0.5f);
         int shy = (int)(hy * i->drawScaleY + 0.5f);
-        bool solid = !c->hasMask() && !((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask());
+        bool solid = !c->hasMask() && !((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->hasAlphaMask());
         gx_canvas->blitstretch(x + hx - shx, y + hy - shy, dw, dh, c, 0, 0, w, h, solid);
         return;
     }
     if (c->hasMask()) {
         gx_canvas->blit(x, y, c, 0, 0, w, h, false);
     }
-    else if ((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask()) {
+    else if ((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->hasAlphaMask()) {
         gx_canvas->blitAlpha(x, y, c, 0, 0, w, h, 0xffffffff, false);
     }
     else {
@@ -1551,14 +1547,14 @@ void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_
         int dh = (int)(r_h * i->drawScaleY + 0.5f);
         int shx = (int)(hx * i->drawScaleX + 0.5f);
         int shy = (int)(hy * i->drawScaleY + 0.5f);
-        bool solid = !c->hasMask() && !((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask());
+        bool solid = !c->hasMask() && !((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->hasAlphaMask());
         gx_canvas->blitstretch(x + hx - shx, y + hy - shy, dw, dh, c, r_x, r_y, r_w, r_h, solid);
         return;
     }
     if (c->hasMask()) {
         gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, false);
     }
-    else if ((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask()) {
+    else if ((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->hasAlphaMask()) {
         gx_canvas->blitAlpha(x, y, c, r_x, r_y, r_w, r_h, 0xffffffff, false);
     }
     else {

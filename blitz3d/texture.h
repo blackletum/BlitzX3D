@@ -5,7 +5,7 @@
 
 #include "cachedtexture.h"
 
-#include "../gxruntime/gxcanvas.h"
+#include "../gfx/gfx.h"
 
 class Texture {
 public:

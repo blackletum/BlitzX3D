@@ -3,7 +3,7 @@
 
 #include "geom.h"
 #include "object.h"
-#include "../gxruntime/gxlight.h"
+#include "../gfx/gfx.h"
 
 class World;
 

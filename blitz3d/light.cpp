@@ -1,6 +1,6 @@
 #include "std.h"
 #include "light.h"
-#include "../gxruntime/gxscene.h"
+#include "../gfx/gfx.h"
 
 extern gxScene* gx_scene;
 

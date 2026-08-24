@@ -22,7 +22,7 @@
 #include "../blitz3d/listener.h"
 #include "../blitz3d/cachedtexture.h"
 #include "../MultiLang/MultiLang.h"
-#include "../gxruntime/gxeffect.h"
+#include "../gfx/gfx.h"
 #include "../gxruntime/gxsound.h"
 #include "../blitz3d/scene.h"
 
@@ -546,11 +546,11 @@ void bbPositionTexture(Texture* t, float u_pos, float v_pos) {
 }
 
 void bbTextureLodBias(float bias) {
-	gx_scene->textureLodBias = *((DWORD*)&bias);
+	gx_scene->setTextureLodBias(bias);
 }
 
 void bbTextureAnisotropic(int level) {
-	gx_scene->textureAnisotropic = level;
+	gx_scene->setTextureAnisotropic(level);
 }
 
 void bbBumpNormalize(int enable) {
@@ -915,7 +915,7 @@ void bbSetEffectMatrix(gxEffect* effect, BBStr* name,
 	float m41, float m42, float m43, float m44) {
 	if (!effect || !name) return;
 	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
-	D3DXMATRIX mat = {
+	float mat[16] = {
 		m11, m12, m13, m14,
 		m21, m22, m23, m24,
 		m31, m32, m33, m34,
@@ -930,8 +930,7 @@ void bbSetEffectTexture(gxEffect* effect, BBStr* name, Texture* tex) {
 	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
 	gxCanvas* c = tex->getCanvas(0);
 	if (c) {
-		IDirect3DBaseTexture9* d3dtex = c->getTexSurface();
-		effect->setTexture(*name, d3dtex);
+		effect->setTexture(*name, c);
 	}
 	delete name;
 }

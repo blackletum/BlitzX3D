@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include "../gxruntime/gxcanvas.h"
+#include "../gfx/gfx.h"
 #include "../gxruntime/asyncimage.h"
 
 class CachedTexture {

@@ -15,11 +15,12 @@
 #include "gxscene.h"
 #include "gxmesh.h"
 #include "gxmovie.h"
+#include "../gfx/gfxgraphics.h"
 
 class gxRuntime;
-class gxEffect;
+class gxEffectD3D9;
 
-class gxGraphics {
+class gxGraphicsD3D9 : public gxGraphics {
 public:
 	IDirect3DDevice9Ex* dir3dDev;
 	IDirect3DSurface9* frontBuffer;
@@ -33,8 +34,8 @@ public:
 
 	bool running_on_wine;
 
-	gxGraphics(gxRuntime* runtime, IDirect3DDevice9Ex* device, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d);
-	~gxGraphics();
+	gxGraphicsD3D9(gxRuntime* runtime, IDirect3DDevice9Ex* device, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d);
+	~gxGraphicsD3D9();
 
 	bool restore();
 
@@ -43,102 +44,94 @@ public:
 
 private:
 
-	gxCanvas* front_canvas, * back_canvas;
-	gxFont* def_font;
+	gxCanvasD3D9* front_canvas, * back_canvas;
+	gxFontD3D9* def_font;
 	bool gfx_lost;
-	gxMesh* dummy_mesh;
+	gxMeshD3D9* dummy_mesh;
 	std::string lastEffectError;
 
-	std::set<gxFont*> font_set;
-	std::set<gxCanvas*> canvas_set;
-	std::set<gxMesh*> mesh_set;
-	std::set<gxScene*> scene_set;
-	std::set<gxMovie*> movie_set;
+	std::set<gxFontD3D9*> font_set;
+	std::set<gxCanvasD3D9*> canvas_set;
+	std::set<gxMeshD3D9*> mesh_set;
+	std::set<gxSceneD3D9*> scene_set;
+	std::set<gxMovieD3D9*> movie_set;
 	std::set<std::string> font_res;
-	std::set<gxEffect*> effect_set;
+	std::set<gxEffectD3D9*> effect_set;
 
 	// DDGAMMARAMP _gammaRamp;
 	// IDirectDrawGammaControl* _gamma;
 
 	/***** GX INTERFACE *****/
 public:
-	enum {
-		GRAPHICS_WINDOWED = 1,	//windowed mode
-		GRAPHICS_SCALED = 2,		//scaled window
-		GRAPHICS_3D = 4,			//3d mode! Hurrah!
-		GRAPHICS_AUTOSUSPEND = 8,	//suspend graphics when app suspended
-		GRAPHICS_BORDERLESS = 16
-	};
-
-	enum DeviceState {
-		DEVICE_OK,
-		DEVICE_LOST,
-		DEVICE_NEEDS_RESET
-	};
-
-	DeviceState getDeviceState();
+	DeviceState getDeviceState() override;
 
 	// i wonder what this is for
-	gxEffect* createEffect(const std::string& filename);
-	gxEffect* verifyEffect(gxEffect* e);
-	void freeEffect(gxEffect* e);
-	void clearEffects();
-	const std::string& getLastEffectError() const { return lastEffectError; }
+	gxEffectD3D9* createEffect(const std::string& filename) override;
+	gxEffectD3D9* verifyEffect(gxEffect* e) override;
+	void freeEffect(gxEffect* e) override;
+	void clearEffects() override;
+	const std::string& getLastEffectError() const override { return lastEffectError; }
 
 	//MANIPULATORS
-	void vwait();
-	void flip(bool vwait);
-	bool changeDisplayMode(int width, int height, bool fullscreen, bool borderless = false);
+	void vwait() override;
+	void flip(bool vwait) override;
+	bool changeDisplayMode(int width, int height, bool fullscreen, bool borderless = false) override;
 
 	//SPECIAL!
-	void copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh);
+	void copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) override;
 
 	//NEW! Gamma control!
-	void setGamma(int r, int g, int b, float dr, float dg, float db);
-	void getGamma(int r, int g, int b, float* dr, float* dg, float* db);
-	void updateGamma(bool calibrate);
+	void setGamma(int r, int g, int b, float dr, float dg, float db) override;
+	void getGamma(int r, int g, int b, float* dr, float* dg, float* db) override;
+	void updateGamma(bool calibrate) override;
 
 	//ACCESSORS
-	int getWidth()const;
-	int getHeight()const;
-	int getDepth()const;
-	int getScanLine()const;
-	int getAvailVidmem()const;
-	int getTotalVidmem()const;
+	int getWidth()const override;
+	int getHeight()const override;
+	int getDepth()const override;
+	int getScanLine()const override;
+	int getAvailVidmem()const override;
+	int getTotalVidmem()const override;
 
-	gxCanvas* getFrontCanvas()const;
-	gxCanvas* getBackCanvas()const;
-	gxFont* getDefaultFont()const;
+	gxCanvasD3D9* getFrontCanvas()const override;
+	gxCanvasD3D9* getBackCanvas()const override;
+	gxFontD3D9* getDefaultFont()const override;
 
 	//OBJECTS
-	gxCanvas* createCanvas(int width, int height, int flags);
-	gxCanvas* loadCanvas(const std::string& file, int flags);
-	gxCanvas* createCanvasFromImage(void* fib32, int w, int h, int flags);
-	gxCanvas* verifyCanvas(gxCanvas* canvas);
-	void freeCanvas(gxCanvas* canvas);
+	gxCanvasD3D9* createCanvas(int width, int height, int flags) override;
+	gxCanvasD3D9* loadCanvas(const std::string& file, int flags) override;
+	gxCanvasD3D9* createCanvasFromImage(void* fib32, int w, int h, int flags) override;
+	gxCanvasD3D9* verifyCanvas(gxCanvas* canvas) override;
+	void freeCanvas(gxCanvas* canvas) override;
+	void adoptCanvas(gxCanvas* c) override;
 
-	gxMovie* openMovie(const std::string& file, int flags);
-	gxMovie* verifyMovie(gxMovie* movie);
-	void closeMovie(gxMovie* movie);
+	bool imageHasAlpha(const std::string& file) override;
+	const std::string& getLastImageError() const override;
+	gxCanvas* loadTextureCanvas(const std::string& file, int flags, bool renderTarget, int* outW, int* outH) override;
+	gxCanvas* createTextureCanvas(int w, int h, int flags, bool renderTarget) override;
 
-	gxFont* loadFont(std::string font, int height, bool bold = false, bool italic = false, bool underlined = false);
-	gxFont* verifyFont(gxFont* font);
-	void freeFont(gxFont* font);
+	gxMovieD3D9* openMovie(const std::string& file, int flags) override;
+	gxMovieD3D9* verifyMovie(gxMovieD3D9* movie);
+	void closeMovie(gxMovie* movie) override;
 
-	gxScene* createScene(int flags);
-	gxScene* verifyScene(gxScene* scene);
-	void freeScene(gxScene* scene);
+	gxFontD3D9* loadFont(std::string font, int height, bool bold = false, bool italic = false, bool underlined = false) override;
+	gxFontD3D9* verifyFont(gxFont* font) override;
+	void freeFont(gxFont* font) override;
 
-	void adoptCanvas(gxCanvas* c);
+	gxSceneD3D9* createScene(int flags) override;
+	gxSceneD3D9* verifyScene(gxScene* scene) override;
+	void freeScene(gxScene* scene) override;
 
-	gxMesh* createMesh(int max_verts, int max_tris, int flags);
-	gxMesh* verifyMesh(gxMesh* mesh);
-	void freeMesh(gxMesh* mesh);
+	gxMeshD3D9* createMesh(int max_verts, int max_tris, int flags) override;
+	gxMeshD3D9* verifyMesh(gxMesh* mesh) override;
+	void freeMesh(gxMesh* mesh) override;
 
 	//GPU SKINNING
-	bool skinningSupported();
-	bool ensureSkinningShader();
+	bool skinningSupported() override;
+	bool ensureSkinningShader() override;
 	IDirect3DVertexShader9* getSkinningShader()const { return skin_vshader; }
+
+	bool runningOnWine() const override { return running_on_wine; }
 
 private:
 	IDirect3DVertexShader9* skin_vshader;

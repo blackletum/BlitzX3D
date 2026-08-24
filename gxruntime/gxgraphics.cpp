@@ -9,7 +9,7 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1) {
+gxGraphicsD3D9::gxGraphicsD3D9(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -19,7 +19,7 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9
 	if (dir3d) dir3d->AddRef();
 	present_params = rt->d3dpp;
 
-	front_canvas = new gxCanvas(this, frontBuffer, 0);
+	front_canvas = new gxCanvasD3D9(this, frontBuffer, 0);
 	// MessageBoxA(NULL, "front_canvas created", "Debug", MB_OK);
 
 	if (!backBuffer) {
@@ -35,7 +35,7 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9
 		// MessageBoxA(NULL, buf, "Error", MB_OK);
 	}
 
-	back_canvas = new gxCanvas(this, backBuffer, 0);
+	back_canvas = new gxCanvasD3D9(this, backBuffer, 0);
 	// MessageBoxA(NULL, "back_canvas created", "Debug", MB_OK);
 
 	front_canvas->cls();
@@ -62,7 +62,7 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9
 	// todo: gamma
 }
 
-gxGraphics::~gxGraphics() {
+gxGraphicsD3D9::~gxGraphicsD3D9() {
 	while (scene_set.size()) freeScene(*scene_set.begin());
 	while (movie_set.size()) closeMovie(*movie_set.begin());
 	while (font_set.size()) freeFont(*font_set.begin());
@@ -94,7 +94,7 @@ gxGraphics::~gxGraphics() {
 	if (backBuffer) backBuffer->Release();
 }
 
-gxEffect* gxGraphics::createEffect(const std::string& filename) {
+gxEffectD3D9* gxGraphicsD3D9::createEffect(const std::string& filename) {
 	ID3DXEffect* effect = nullptr;
 	ID3DXBuffer* errors = nullptr;
 
@@ -124,36 +124,37 @@ gxEffect* gxGraphics::createEffect(const std::string& filename) {
 		return nullptr;
 	}
 	lastEffectError.clear();
-	gxEffect* e = new gxEffect(this, effect);
+	gxEffectD3D9* e = new gxEffectD3D9(this, effect);
 	effect_set.insert(e);
 	return e;
 }
 
-gxEffect* gxGraphics::verifyEffect(gxEffect* e) {
-	return effect_set.count(e) ? e : nullptr;
+gxEffectD3D9* gxGraphicsD3D9::verifyEffect(gxEffect* e) {
+	gxEffectD3D9* t = static_cast<gxEffectD3D9*>(e);
+	return effect_set.count(t) ? t : nullptr;
 }
 
-void gxGraphics::freeEffect(gxEffect* e) {
-	if (effect_set.erase(e)) delete e;
+void gxGraphicsD3D9::freeEffect(gxEffect* e) {
+	if (effect_set.erase(static_cast<gxEffectD3D9*>(e))) delete e;
 }
 
-void gxGraphics::clearEffects() {
+void gxGraphicsD3D9::clearEffects() {
 	while (effect_set.size()) freeEffect(*effect_set.begin());
 }
 
-void gxGraphics::setGamma(int r, int g, int b, float dr, float dg, float db) {
+void gxGraphicsD3D9::setGamma(int r, int g, int b, float dr, float dg, float db) {
 	//bruh
 }
 
-void gxGraphics::updateGamma(bool calibrate) {
+void gxGraphicsD3D9::updateGamma(bool calibrate) {
 	//bruh
 }
 
-void gxGraphics::getGamma(int r, int g, int b, float* dr, float* dg, float* db) {
+void gxGraphicsD3D9::getGamma(int r, int g, int b, float* dr, float* dg, float* db) {
 	//bruh
 }
 
-bool gxGraphics::restore() {
+bool gxGraphicsD3D9::restore() {
 	if (!dir3dDev) return false;
 
 	HRESULT hr = dir3dDev->CheckDeviceState(runtime->hwnd);
@@ -216,7 +217,7 @@ bool gxGraphics::restore() {
 	return true;
 }
 
-bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool borderless) {
+bool gxGraphicsD3D9::changeDisplayMode(int width, int height, bool fullscreen, bool borderless) {
 	if (!dir3dDev) return false;
 
 	HWND hwnd = runtime->hwnd;
@@ -299,7 +300,7 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 
 	if (runtime->stretchRT) { runtime->stretchRT->Release(); runtime->stretchRT = nullptr; }
 
-	auto updateCanvas = [&](gxCanvas* canvas) {
+	auto updateCanvas = [&](gxCanvasD3D9* canvas) {
 		if (!canvas) return;
 		if (canvas->surf) {
 			canvas->surf->Release();
@@ -335,23 +336,23 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	return true;
 }
 
-gxCanvas* gxGraphics::getFrontCanvas()const {
+gxCanvasD3D9* gxGraphicsD3D9::getFrontCanvas()const {
 	return front_canvas;
 }
 
-gxCanvas* gxGraphics::getBackCanvas()const {
+gxCanvasD3D9* gxGraphicsD3D9::getBackCanvas()const {
 	return back_canvas;
 }
 
-gxFont* gxGraphics::getDefaultFont()const {
+gxFontD3D9* gxGraphicsD3D9::getDefaultFont()const {
 	return def_font;
 }
 
-void gxGraphics::vwait() { // stubby stbu stub
+void gxGraphicsD3D9::vwait() { // stubby stbu stub
 	// dirDraw->WaitForVerticalBlank(DDWAITVB_BLOCKBEGIN, 0);
 }
 
-gxGraphics::DeviceState gxGraphics::getDeviceState() {
+gxGraphics::DeviceState gxGraphicsD3D9::getDeviceState() {
 	if (!dir3dDev) return DEVICE_LOST;
 	HRESULT hr = dir3dDev->CheckDeviceState(runtime->hwnd);
 	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) return DEVICE_LOST;
@@ -359,24 +360,26 @@ gxGraphics::DeviceState gxGraphics::getDeviceState() {
 	return DEVICE_OK;
 }
 
-void gxGraphics::flip(bool vwait) {
+void gxGraphicsD3D9::flip(bool vwait) {
 	if (runtime) runtime->flip(vwait);
 }
 
-void gxGraphics::copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) {
+void gxGraphicsD3D9::copy(gxCanvas* dest_base, int dx, int dy, int dw, int dh, gxCanvas* src_base, int sx, int sy, int sw, int sh) {
+	gxCanvasD3D9* dest = static_cast<gxCanvasD3D9*>(dest_base);
+	gxCanvasD3D9* src = static_cast<gxCanvasD3D9*>(src_base);
 	ddUtil::copy(dir3dDev, dest->getSurface(), dx, dy, dw, dh, src->getSurface(), sx, sy, sw, sh);
 	RECT r = { dx, dy, dx + dw, dy + dh };
 	dest->damage(r);
 }
 
-int gxGraphics::getScanLine() const { return 0; }
+int gxGraphicsD3D9::getScanLine() const { return 0; }
 
-int gxGraphics::getAvailVidmem() const { return 0; }
+int gxGraphicsD3D9::getAvailVidmem() const { return 0; }
 
-int gxGraphics::getTotalVidmem() const { return 0; }
+int gxGraphicsD3D9::getTotalVidmem() const { return 0; }
 
-gxMovie* gxGraphics::openMovie(const std::string& file, int flags) {
-	gxMovie* movie = new gxMovie(this, file);
+gxMovieD3D9* gxGraphicsD3D9::openMovie(const std::string& file, int flags) {
+	gxMovieD3D9* movie = new gxMovieD3D9(this, file);
 	if (!movie->isValid()) {
 		delete movie;
 		return nullptr;
@@ -385,20 +388,20 @@ gxMovie* gxGraphics::openMovie(const std::string& file, int flags) {
 	return movie;
 }
 
-gxMovie* gxGraphics::verifyMovie(gxMovie* m) {
+gxMovieD3D9* gxGraphicsD3D9::verifyMovie(gxMovieD3D9* m) {
 	return movie_set.count(m) ? m : 0;
 }
 
-void gxGraphics::closeMovie(gxMovie* m) {
-	if (movie_set.erase(m)) delete m;
+void gxGraphicsD3D9::closeMovie(gxMovie* m) {
+	if (movie_set.erase(static_cast<gxMovieD3D9*>(m))) delete m;
 }
 
-gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
+gxCanvasD3D9* gxGraphicsD3D9::createCanvas(int w, int h, int flags) {
 	if (flags & gxCanvas::CANVAS_TEX_CUBE) {
 		int size = w > h ? w : h;
 		IDirect3DCubeTexture9* cubeTex = ddUtil::createCubeTextureSurface(size, flags, this);
 		if (!cubeTex) return nullptr;
-		gxCanvas* c = new gxCanvas(this, cubeTex, flags);
+		gxCanvasD3D9* c = new gxCanvasD3D9(this, cubeTex, flags);
 		canvas_set.insert(c);
 		c->cls();
 		return c;
@@ -406,20 +409,20 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
 		IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, flags, this, true);
 		if (!tex) return nullptr;
-		gxCanvas* c = new gxCanvas(this, tex, flags);
+		gxCanvasD3D9* c = new gxCanvasD3D9(this, tex, flags);
 		canvas_set.insert(c);
 		c->cls();
 		return c;
 	}
     IDirect3DSurface9* surf = ddUtil::createDisplaySurface(w, h, flags, this);
 	if (!surf) return nullptr;
-	gxCanvas* c = new gxCanvas(this, surf, flags);
+	gxCanvasD3D9* c = new gxCanvasD3D9(this, surf, flags);
 	canvas_set.insert(c);
 	c->cls();
 	return c;
 }
 
-gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
+gxCanvasD3D9* gxGraphicsD3D9::loadCanvas(const std::string& f, int flags) {
 	if (!(flags & gxCanvas::CANVAS_TEXTURE)) {
 		if (ddUtil::hasActualAlpha(f)) {
 			flags |= gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA;
@@ -429,51 +432,52 @@ gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 		int srcW = 0, srcH = 0;
 		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this, true, &srcW, &srcH);
 		if (!tex) return nullptr;
-		gxCanvas* c = new gxCanvas(this, tex, flags);
+		gxCanvasD3D9* c = new gxCanvasD3D9(this, tex, flags);
 		if (srcW > 0 && srcH > 0) c->setLogicalSize(srcW, srcH);
 		canvas_set.insert(c);
 		return c;
 	}
 	IDirect3DSurface9* surf = ddUtil::loadDisplaySurface(f, flags, this);
 	if (!surf) return nullptr;
-	gxCanvas* c = new gxCanvas(this, surf, flags);
+	gxCanvasD3D9* c = new gxCanvasD3D9(this, surf, flags);
 	canvas_set.insert(c);
 	return c;
 }
 
-gxCanvas* gxGraphics::createCanvasFromImage(void* fib32, int w, int h, int flags) {
+gxCanvasD3D9* gxGraphicsD3D9::createCanvasFromImage(void* fib32, int w, int h, int flags) {
 	if ((flags & gxCanvas::CANVAS_TEX_MASK) && !(flags & gxCanvas::CANVAS_TEX_ALPHA)) {
 		flags |= gxCanvas::CANVAS_TEX_ALPHA;
 	}
 	IDirect3DTexture9* tex = ddUtil::textureFromDecoded(fib32, w, h, flags, this, true, &w, &h);
 	if (!tex) return nullptr;
-	gxCanvas* c = new gxCanvas(this, tex, flags);
+	gxCanvasD3D9* c = new gxCanvasD3D9(this, tex, flags);
 	if (w > 0 && h > 0) c->setLogicalSize(w, h);
 	canvas_set.insert(c);
 	return c;
 }
 
-gxCanvas* gxGraphics::verifyCanvas(gxCanvas* c) {
-	return canvas_set.count(c) || c == front_canvas || c == back_canvas ? c : 0;
+gxCanvasD3D9* gxGraphicsD3D9::verifyCanvas(gxCanvas* c) {
+	gxCanvasD3D9* t = static_cast<gxCanvasD3D9*>(c);
+	return canvas_set.count(t) || t == front_canvas || t == back_canvas ? t : 0;
 }
 
-void gxGraphics::freeCanvas(gxCanvas* c) {
-	if (canvas_set.erase(c)) delete c;
+void gxGraphicsD3D9::freeCanvas(gxCanvas* c) {
+	if (canvas_set.erase(static_cast<gxCanvasD3D9*>(c))) delete c;
 }
 
-int gxGraphics::getWidth()const {
+int gxGraphicsD3D9::getWidth()const {
 	return front_canvas->getWidth();
 }
 
-int gxGraphics::getHeight()const {
+int gxGraphicsD3D9::getHeight()const {
 	return front_canvas->getHeight();
 }
 
-int gxGraphics::getDepth()const {
+int gxGraphicsD3D9::getDepth()const {
 	return front_canvas->getDepth();
 }
 
-gxFont* gxGraphics::loadFont(std::string f, int height, bool bold, bool italic, bool underlined) {
+gxFontD3D9* gxGraphicsD3D9::loadFont(std::string f, int height, bool bold, bool italic, bool underlined) {
 	std::string t;
 	int n = f.find('.');
 	if (n == std::string::npos) {
@@ -485,24 +489,25 @@ gxFont* gxGraphics::loadFont(std::string f, int height, bool bold, bool italic, 
 		t = f;
 	}
 
-	gxFont* newFont = new gxFont(ftLibrary, this, f, height, bold, italic, underlined); // this line crashes in the backported version of UER, investigate !
+	gxFontD3D9* newFont = new gxFontD3D9(ftLibrary, this, f, height, bold, italic, underlined); // this line crashes in the backported version of UER, investigate !
 	font_set.emplace(newFont);
 	return newFont;
 }
 
-gxFont* gxGraphics::verifyFont(gxFont* f) {
-	return font_set.count(f) ? f : 0;
+gxFontD3D9* gxGraphicsD3D9::verifyFont(gxFont* f) {
+	gxFontD3D9* t = static_cast<gxFontD3D9*>(f);
+	return font_set.count(t) ? t : 0;
 }
 
-void gxGraphics::freeFont(gxFont* f) {
-	if (font_set.erase(f)) delete f;
+void gxGraphicsD3D9::freeFont(gxFont* f) {
+	if (font_set.erase(static_cast<gxFontD3D9*>(f))) delete f;
 }
 
 //////////////
 // 3D STUFF //
 //////////////
 
-gxScene* gxGraphics::createScene(int flags) {
+gxSceneD3D9* gxGraphicsD3D9::createScene(int flags) {
 	if (scene_set.size()) return 0;
 	if (!dir3dDev) return 0;
 
@@ -520,14 +525,18 @@ gxScene* gxGraphics::createScene(int flags) {
 		return 0;
 	}
 
-	gxScene* scene = new gxScene(this, back_canvas);
+	gxSceneD3D9* scene = new gxSceneD3D9(this, back_canvas);
 	scene_set.insert(scene);
 	return scene;
 }
 
-gxScene* gxGraphics::verifyScene(gxScene* s) { return scene_set.count(s) ? s : 0; }
+gxSceneD3D9* gxGraphicsD3D9::verifyScene(gxScene* s) {
+	gxSceneD3D9* t = static_cast<gxSceneD3D9*>(s);
+	return scene_set.count(t) ? t : 0;
+}
 
-void gxGraphics::freeScene(gxScene* scene) {
+void gxGraphicsD3D9::freeScene(gxScene* s) {
+	gxSceneD3D9* scene = static_cast<gxSceneD3D9*>(s);
 	if (!scene_set.erase(scene)) return;
 	dummy_mesh = 0;
 	while (mesh_set.size()) freeMesh(*mesh_set.begin());
@@ -535,11 +544,35 @@ void gxGraphics::freeScene(gxScene* scene) {
 	delete scene;
 }
 
-void gxGraphics::adoptCanvas(gxCanvas* c) {
-	canvas_set.insert(c);
+void gxGraphicsD3D9::adoptCanvas(gxCanvas* cb) {
+	canvas_set.insert(static_cast<gxCanvasD3D9*>(cb));
 }
 
-gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
+bool gxGraphicsD3D9::imageHasAlpha(const std::string& file) {
+	return ddUtil::hasActualAlpha(file);
+}
+
+const std::string& gxGraphicsD3D9::getLastImageError() const {
+	return ddUtil::getLastImageError();
+}
+
+gxCanvas* gxGraphicsD3D9::loadTextureCanvas(const std::string& file, int flags, bool renderTarget, int* outW, int* outH) {
+	IDirect3DTexture9* tex = ddUtil::loadTextureSurface(file, flags, this, renderTarget, outW, outH);
+	if (!tex) return nullptr;
+	gxCanvasD3D9* c = new gxCanvasD3D9(this, tex, gxCanvas::CANVAS_TEXTURE | flags);
+	canvas_set.insert(c);
+	return c;
+}
+
+gxCanvas* gxGraphicsD3D9::createTextureCanvas(int w, int h, int flags, bool renderTarget) {
+	IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, gxCanvas::CANVAS_TEXTURE | flags, this, renderTarget);
+	if (!tex) return nullptr;
+	gxCanvasD3D9* c = new gxCanvasD3D9(this, tex, gxCanvas::CANVAS_TEXTURE | flags);
+	canvas_set.insert(c);
+	return c;
+}
+
+gxMeshD3D9* gxGraphicsD3D9::createMesh(int max_verts, int max_tris, int flags) {
 
 	bool dynamic = (flags & gxMesh::MESH_DYNAMIC) != 0;
 	DWORD usage = D3DUSAGE_WRITEONLY | (dynamic ? D3DUSAGE_DYNAMIC : 0);
@@ -552,7 +585,7 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 		if (!ensureSkinningShader()) return nullptr;
 		IDirect3DVertexBuffer9* vb = nullptr;
 		DWORD skin_usage = D3DUSAGE_WRITEONLY | D3DUSAGE_DYNAMIC;
-		if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMesh::dxSkinVertex), skin_usage, 0, pool, &vb, nullptr)))
+		if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMeshD3D9::dxSkinVertex), skin_usage, 0, pool, &vb, nullptr)))
 		{
 			return nullptr;
 		}
@@ -561,7 +594,7 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 			vb->Release();
 			return nullptr;
 		}
-		gxMesh* mesh = new gxMesh(this, vb, ib, skin_decl, max_verts, max_tris);
+		gxMeshD3D9* mesh = new gxMeshD3D9(this, vb, ib, skin_decl, max_verts, max_tris);
 		mesh_set.insert(mesh);
 		return mesh;
 	}
@@ -570,24 +603,25 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 
 	IDirect3DVertexBuffer9* vb = nullptr;
-	if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, pool, &vb, nullptr)))
+	if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMeshD3D9::dxVertex), usage, VTXFMT, pool, &vb, nullptr)))
 		return nullptr;
 	IDirect3DIndexBuffer9* ib = nullptr;
 	if (FAILED(dir3dDev->CreateIndexBuffer(safe_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, pool, &ib, nullptr))) {
 		vb->Release();
 		return nullptr;
 	}
-	gxMesh* mesh = new gxMesh(this, vb, ib, max_verts, max_tris);
+	gxMeshD3D9* mesh = new gxMeshD3D9(this, vb, ib, max_verts, max_tris);
 	mesh_set.insert(mesh);
 	return mesh;
 }
 
-gxMesh* gxGraphics::verifyMesh(gxMesh* m) {
-	return mesh_set.count(m) ? m : 0;
+gxMeshD3D9* gxGraphicsD3D9::verifyMesh(gxMesh* m) {
+	gxMeshD3D9* t = static_cast<gxMeshD3D9*>(m);
+	return mesh_set.count(t) ? t : 0;
 }
 
-void gxGraphics::freeMesh(gxMesh* mesh) {
-	if (mesh_set.erase(mesh)) delete mesh;
+void gxGraphicsD3D9::freeMesh(gxMesh* m) {
+	if (mesh_set.erase(static_cast<gxMeshD3D9*>(m))) delete m;
 }
 
 // GPU SKINNING
@@ -693,7 +727,7 @@ static const char* SKIN_VSHADER_SRC =
 "    return OUT;\n"
 "}\n";
 
-bool gxGraphics::skinningSupported() {
+bool gxGraphicsD3D9::skinningSupported() {
 	if (skin_caps_checked == -1) {
 		D3DCAPS9 caps;
 		skin_caps_checked = 0;
@@ -706,7 +740,7 @@ bool gxGraphics::skinningSupported() {
 	return skin_caps_checked == 1;
 }
 
-bool gxGraphics::ensureSkinningShader() {
+bool gxGraphicsD3D9::ensureSkinningShader() {
 	if (skin_vshader && skin_decl) return true;
 	if (skin_shader_load_failed) return false;
 

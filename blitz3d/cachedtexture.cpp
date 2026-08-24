@@ -1,6 +1,6 @@
 #include "std.h"
 #include "cachedtexture.h"
-#include "../gxruntime/gxgraphics.h"
+#include "../gfx/gfx.h"
 
 int active_texs;
 

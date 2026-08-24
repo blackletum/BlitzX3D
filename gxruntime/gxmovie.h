@@ -10,8 +10,9 @@
 #include <cstdint>
 
 #include "gxcanvas.h"
+#include "../gfx/gfxmovie.h"
 
-class gxGraphics;
+class gxGraphicsD3D9;
 
 struct AVFormatContext;
 struct AVCodecContext;
@@ -21,25 +22,25 @@ struct AVPacket;
 
 //Who the fuck actually uses this?
 //kid named everyone:
-class gxMovie {
+class gxMovieD3D9 : public gxMovie {
 
 public:
-	gxMovie(gxGraphics* gfx, const std::string& file);
-	~gxMovie();
+	gxMovieD3D9(gxGraphicsD3D9* gfx, const std::string& file);
+	~gxMovieD3D9();
 
-	bool isValid() const { return valid; }
+	bool isValid() const override { return valid; }
 
 	/***** GX INTERFACE *****/
 public:
 	std::string filename;
-	bool draw(gxCanvas* dest, int x, int y, int w, int h);
+	bool draw(gxCanvas* dest, int x, int y, int w, int h) override;
 
-	bool isPlaying() const { return playing.load(); }
-	int getWidth()const { return src_w; }
-	int getHeight()const { return src_h; }
+	bool isPlaying() const override { return playing.load(); }
+	int getWidth()const override { return src_w; }
+	int getHeight()const override { return src_h; }
 
 private:
-	gxGraphics* gfx;
+	gxGraphicsD3D9* gfx;
 	int src_w = 0, src_h = 0;
 
 	std::atomic<bool> playing{ false };
@@ -60,8 +61,8 @@ private:
 	double stream_time_base_first_pts = 0.0;
 
 	std::thread decode_thread;
-	gxCanvas* scratch_front = nullptr;
-	gxCanvas* scratch_back = nullptr;
+	gxCanvasD3D9* scratch_front = nullptr;
+	gxCanvasD3D9* scratch_back = nullptr;
 	int scratch_w = 0, scratch_h = 0;
 
 	AVFormatContext* fmt_ctx = nullptr;

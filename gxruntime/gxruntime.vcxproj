@@ -178,6 +178,15 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\gfx\gfx.h" />
+    <ClInclude Include="..\gfx\gfxcanvas.h" />
+    <ClInclude Include="..\gfx\gfxeffect.h" />
+    <ClInclude Include="..\gfx\gfxfont.h" />
+    <ClInclude Include="..\gfx\gfxgraphics.h" />
+    <ClInclude Include="..\gfx\gfxlight.h" />
+    <ClInclude Include="..\gfx\gfxmesh.h" />
+    <ClInclude Include="..\gfx\gfxmovie.h" />
+    <ClInclude Include="..\gfx\gfxscene.h" />
     <ClInclude Include="asmcoder.h" />
     <ClInclude Include="asyncimage.h" />
     <ClInclude Include="asyncsound.h" />

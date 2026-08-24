@@ -2,7 +2,7 @@
 #define BBGRAPHICS_H
 
 #include "bbsys.h"
-#include "../gxruntime/gxgraphics.h"
+#include "../gfx/gfx.h"
 #include "../blitz3d/texture.h"
 
 extern gxGraphics* gx_graphics;

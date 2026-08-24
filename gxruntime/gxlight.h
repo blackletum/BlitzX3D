@@ -4,35 +4,34 @@
 #include <cstring>
 #include <d3d9.h>
 
-class gxScene;
+#include "../gfx/gfxlight.h"
 
-class gxLight {
+class gxSceneD3D9;
+
+class gxLightD3D9 : public gxLight {
 public:
-	gxLight(gxScene* scene, int type);
-	~gxLight();
+	gxLightD3D9(gxSceneD3D9* scene, int type);
+	~gxLightD3D9();
 
 	D3DLIGHT9 d3d_light;
 
 private:
-	gxScene* scene;
+	gxSceneD3D9* scene;
 
 	/***** GX INTERFACE *****/
 public:
-	enum {
-		LIGHT_DISTANT = 1, LIGHT_POINT = 2, LIGHT_SPOT = 3
-	};
-	void setRange(float range);
+	void setRange(float range) override;
 
-	void setColor(const float rgb[3]) {
+	void setColor(const float rgb[3]) override {
 		memcpy(&d3d_light.Diffuse, rgb, sizeof(float) * 3);
 		d3d_light.Diffuse.a = 1.0f;
 	}
 
-	void setPosition(const float pos[3]);
-	void setDirection(const float dir[3]);
-	void setConeAngles(float inner, float outer);
+	void setPosition(const float pos[3]) override;
+	void setDirection(const float dir[3]) override;
+	void setConeAngles(float inner, float outer) override;
 
-	void getColor(float rgb[3]) {
+	void getColor(float rgb[3]) override {
 		memcpy(rgb, &d3d_light.Diffuse, sizeof(float) * 3);
 	}
 };

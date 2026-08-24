@@ -206,7 +206,7 @@ bool MeshModel::wantGpuSkinning() {
 	if (!gpu_skinning_enabled) return false;
 	if (!gx_graphics) return false;
 	if (!gx_graphics->skinningSupported()) return false;
-	if (!gx_graphics->getSkinningShader()) return false;
+	if (!gx_graphics->ensureSkinningShader()) return false;
 	if ((int)surf_bones.size() > gxMesh::MAX_SKIN_BONES) {
 		if (!warned_bone_overflow) {
 			std::string msg = "GPU skinning: mesh has " + std::to_string((int)surf_bones.size()) + " bones (max " + std::to_string((int)gxMesh::MAX_SKIN_BONES) + "), falling back to CPU skinning";

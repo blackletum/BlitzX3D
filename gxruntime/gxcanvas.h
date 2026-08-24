@@ -3,22 +3,24 @@
 
 #include "ddutil.h"
 
-class gxFont;
-class gxGraphics;
-class gxEffect;
+#include "../gfx/gfxcanvas.h"
+
+class gxFontD3D9;
+class gxGraphicsD3D9;
+class gxEffectD3D9;
 
 
-class gxCanvas {
+class gxCanvasD3D9 : public gxCanvas {
 public:
-	gxCanvas(gxGraphics* g, IDirect3DSurface9* surf, int flags);
-	gxCanvas(gxGraphics* g, IDirect3DTexture9* tex, int flags);
-	gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* cube_tex, int flags);
-	~gxCanvas();
+	gxCanvasD3D9(gxGraphicsD3D9* g, IDirect3DSurface9* surf, int flags);
+	gxCanvasD3D9(gxGraphicsD3D9* g, IDirect3DTexture9* tex, int flags);
+	gxCanvasD3D9(gxGraphicsD3D9* g, IDirect3DCubeTexture9* cube_tex, int flags);
+	~gxCanvasD3D9();
 
-	gxGraphics* graphics;
+	gxGraphicsD3D9* graphics;
 
-	void backup();
-	void restore();
+	void backup() override;
+	void restore() override;
 
 	IDirect3DSurface9* getSurface()  const;
 	IDirect3DBaseTexture9* getTexture() const;
@@ -41,8 +43,8 @@ public:
 	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
 	bool has_mask;
 
-	void setModify(int n);
-	int  getModify() const;
+	void setModify(int n) override;
+	int  getModify() const override;
 
 	bool attachZBuffer();
 	void releaseZBuffer();
@@ -53,8 +55,8 @@ public:
 	bool clip(RECT* d, RECT* s) const;
 	void damage(const RECT& r)  const;
 
-	void set2DEffect(gxEffect* effect);
-	gxEffect* get2DEffect() const;
+	void set2DEffect(gxEffect* effect) override;
+	gxEffect* get2DEffect() const override;
 
 	IDirect3DSurface9* surf;             // the "active" surf
 	IDirect3DSurface9* z_surf;           // depth/stencil surf
@@ -73,8 +75,8 @@ private:
 	mutable int cm_pitch;
 	mutable unsigned* cm_mask;
 
-	gxEffect* effect2D;
-	gxFont* font;
+	gxEffectD3D9* effect2D;
+	gxFontD3D9* font;
 	RECT viewport;
 	int origin_x, origin_y, handle_x, handle_y;
 
@@ -86,102 +88,77 @@ private:
 
 	/***** GX INTERFACE *****/
 public:
-	enum {
-		CANVAS_TEX_RGB = 0x0001,
-		CANVAS_TEX_ALPHA = 0x0002,
-		CANVAS_TEX_MASK = 0x0004,
-		CANVAS_TEX_MIPMAP = 0x0008,
-		CANVAS_TEX_CLAMPU = 0x0010,
-		CANVAS_TEX_CLAMPV = 0x0020,
-		CANVAS_TEX_SPHERE = 0x0040,
-		CANVAS_TEX_CUBE = 0x0080,
-		CANVAS_TEX_VIDMEM = 0x0100,
-		CANVAS_TEX_HICOLOR = 0x0200,
-		CANVAS_TEX_POINT = 0x0400,
-		CANVAS_TEX_NOFILTER = 0x0800,
-		CANVAS_TEX_BILINEAR = 0x1000,
-		CANVAS_TEX_ANISOTROPIC = 0x2000,
-
-		CANVAS_TEXTURE = 0x10000,
-		CANVAS_NONDISPLAY = 0x20000,
-		CANVAS_HIGHCOLOR = 0x40000
-	};
-
-	enum {
-		CUBEMODE_REFLECTION = 1,
-		CUBEMODE_NORMAL = 2,
-		CUBEMODE_POSITION = 3,
-
-		CUBESPACE_WORLD = 0,
-		CUBESPACE_CAMERA = 4
-	};
-
 	void fillRect(const RECT& r, unsigned argb);
 
 	//MANIPULATORS
-	void setFont(gxFont* font);
-	void setMask(unsigned argb);
-	void setColor(unsigned argb);
-	void setClsColor(unsigned argb);
-	void setOrigin(int x, int y);
-	void setHandle(int x, int y);
-	void setViewport(int x, int y, int w, int h);
+	void setFont(gxFont* font) override;
+	void setMask(unsigned argb) override;
+	void setColor(unsigned argb) override;
+	void setClsColor(unsigned argb) override;
+	void setOrigin(int x, int y) override;
+	void setHandle(int x, int y) override;
+	void setViewport(int x, int y, int w, int h) override;
 
-	void cls();
-	void plot(int x, int y);
-	void line(int x, int y, int x2, int y2);
-	void rect(int x, int y, int w, int h, bool solid);
-	void oval(int x, int y, int w, int h, bool solid);
-	void text(int x, int y, const std::string& t);
-	void blit(int x, int y, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, bool solid);
+	void cls() override;
+	void plot(int x, int y) override;
+	void line(int x, int y, int x2, int y2) override;
+	void rect(int x, int y, int w, int h, bool solid) override;
+	void oval(int x, int y, int w, int h, bool solid) override;
+	void text(int x, int y, const std::string& t) override;
+	void blit(int x, int y, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, bool solid) override;
 
-	void blitstretch(int x, int y, int w, int h, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, bool solid);//for CopyRectStretch
+	void blitstretch(int x, int y, int w, int h, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, bool solid) override;//for CopyRectStretch
 
-	void blitAlpha(int x, int y, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, unsigned color_argb, bool filter = false);//for anti-aliased fonts
+	void blitAlpha(int x, int y, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, unsigned color_argb, bool filter = false) override;//for anti-aliased fonts
 
-	bool collide(int x, int y, const gxCanvas* src, int src_x, int src_y, bool solid)const;
-	bool rect_collide(int x, int y, int rect_x, int rect_y, int rect_w, int rect_h, bool solid)const;
+	bool collide(int x, int y, const gxCanvas* src, int src_x, int src_y, bool solid)const override;
+	bool rect_collide(int x, int y, int rect_x, int rect_y, int rect_w, int rect_h, bool solid)const override;
 
-	void beginBlitBatch() const;
-	void endBlitBatch() const;
+	void beginBlitBatch() const override;
+	void endBlitBatch() const override;
 
-	bool lock()const;
-	bool isLocked()const { return locked_cnt > 0; }
-	unsigned char* getLockedSurf()const { return locked_surf; }
-	int getLockedPitch()const { return locked_pitch; }
-	void setPixel(int x, int y, unsigned argb);
-	void setPixelFast(int x, int y, unsigned argb) {
+	bool lock()const override;
+	bool isLocked()const override { return locked_cnt > 0; }
+	unsigned char* getLockedSurf()const override { return locked_surf; }
+	int getLockedPitch()const override { return locked_pitch; }
+	void setPixel(int x, int y, unsigned argb) override;
+	void setPixelFast(int x, int y, unsigned argb) override {
 		format.setPixel(locked_surf + y * locked_pitch + x * format.getPitch(), argb);
 		++mod_cnt;
 	}
-	void copyPixel(int x, int y, gxCanvas* src, int src_x, int src_y);
-	void copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y);
-	unsigned getPixel(int x, int y)const;
-	unsigned getPixelFast(int x, int y)const {
+	void copyPixel(int x, int y, gxCanvas* src, int src_x, int src_y) override;
+	void copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y) override;
+	unsigned getPixel(int x, int y)const override;
+	unsigned getPixelFast(int x, int y)const override {
 		return format.getPixel(locked_surf + y * locked_pitch + x * format.getPitch());
 	};
-	void unlock()const;
+	void unlock()const override;
 
-	void setCubeMode(int mode);
-	void setCubeFace(int face);
+	void setCubeMode(int mode) override;
+	void setCubeFace(int face) override;
 
 	int logical_w, logical_h;
-	void setLogicalSize(int w, int h) { logical_w = w; logical_h = h; }
+	void setLogicalSize(int w, int h) override { logical_w = w; logical_h = h; }
 
 	//ACCESSORS
-	int getWidth()const;
-	int getHeight()const;
-	int getDepth()const;
-	int getFlags()const { return flags; }
-	int cubeMode()const { return cube_mode; }
-	void getOrigin(int* x, int* y)const;
-	void getHandle(int* x, int* y)const;
-	void getViewport(int* x, int* y, int* w, int* h)const;
-	unsigned getMask()const;
-	bool hasMask()const { return has_mask; }
-	void copyMaskFrom(const gxCanvas* src) { mask_surf = src->mask_surf; has_mask = src->has_mask; }
-	unsigned getColor()const;
-	unsigned getClsColor()const;
+	int getWidth()const override;
+	int getHeight()const override;
+	int getDepth()const override;
+	int getFlags()const override { return flags; }
+	int cubeMode()const override { return cube_mode; }
+	void getOrigin(int* x, int* y)const override;
+	void getHandle(int* x, int* y)const override;
+	void getViewport(int* x, int* y, int* w, int* h)const override;
+	unsigned getMask()const override;
+	bool hasMask()const override { return has_mask; }
+	void copyMaskFrom(const gxCanvas* src) override {
+		const gxCanvasD3D9* s = static_cast<const gxCanvasD3D9*>(src);
+		mask_surf = s->mask_surf; has_mask = s->has_mask;
+	}
+	unsigned getColor()const override;
+	unsigned getClsColor()const override;
+	bool hasAlphaMask()const override { return format.hasAlphaMask(); }
+
 	IDirect3DBaseTexture9* getTexSurface() const;
 	void setMipmapNeeded(bool needed) const { mipmapNeeded = needed; }
 };

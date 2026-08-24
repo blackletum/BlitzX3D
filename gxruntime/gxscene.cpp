@@ -11,25 +11,25 @@ static float WHITE[] = { 1,1,1 };
 static float GRAY[] = { .5f,.5f,.5f };
 static D3DMATRIX sphere_mat, nullmatrix;
 
-void gxScene::setRS(int n, int t) {
+void gxSceneD3D9::setRS(int n, int t) {
 	if(d3d_rs[n] == t) return;
 	dir3dDev->SetRenderState((D3DRENDERSTATETYPE)n, t);
 	d3d_rs[n] = t;
 }
 
-void gxScene::setTSS(int n, int s, int t) {
+void gxSceneD3D9::setTSS(int n, int s, int t) {
 	if(d3d_tss[n][s] == t) return;
 	dir3dDev->SetTextureStageState(n, (D3DTEXTURESTAGESTATETYPE)s, t);
 	d3d_tss[n][s] = t;
 }
 
-void gxScene::setSamp(int n, int s, int t) {
+void gxSceneD3D9::setSamp(int n, int s, int t) {
 	if (d3d_samp[n][s] == t) return;
 	dir3dDev->SetSamplerState(n, (D3DSAMPLERSTATETYPE)s, t);
 	d3d_samp[n][s] = t;
 }
 
-void gxScene::setTex(int n, IDirect3DBaseTexture9* t) {
+void gxSceneD3D9::setTex(int n, IDirect3DBaseTexture9* t) {
 	if (d3d_tex[n] == t) return;
 	dir3dDev->SetTexture(n, t);
 	d3d_tex[n] = t;
@@ -95,7 +95,7 @@ static uint64_t computeRenderStateKey(const gxScene::RenderState& rs) {
 	return key;
 }
 
-gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
+gxSceneD3D9::gxSceneD3D9(gxGraphicsD3D9* g, gxCanvasD3D9* t) :
 	graphics(g), target(t), dir3dDev(g->dir3dDev),
 	n_texs(0), tris_drawn(0), lastStateKey(0) {
 
@@ -218,25 +218,29 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	setRenderState(state);
 }
 
-gxScene::~gxScene() {
+gxSceneD3D9::~gxSceneD3D9() {
 	while(_allLights.size()) freeLight(*_allLights.begin());
 }
 
-void gxScene::setEffect(gxEffect* e) {
-	currentEffect = e;
+void gxSceneD3D9::setDepthTarget(gxCanvas* c) {
+	depthTarget = static_cast<gxCanvasD3D9*>(c);
 }
 
-gxEffect* gxScene::getEffect() const {
+void gxSceneD3D9::setEffect(gxEffect* e) {
+	currentEffect = static_cast<gxEffectD3D9*>(e);
+}
+
+gxEffect* gxSceneD3D9::getEffect() const {
 	return currentEffect;
 }
 
-void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
+void gxSceneD3D9::setTexState(int n, const TexState& state, bool tex_blend) {
 
 	int flags = state.canvas->getFlags();
 	int tc_index = state.flags & TEX_COORDS2 ? 1 : 0;
 
 	//set canvas
-	setTex(n, state.canvas->getTexSurface());
+	setTex(n, static_cast<gxCanvasD3D9*>(state.canvas)->getTexSurface());
 
 	//set addressing modes
 	setSamp(n, D3DSAMP_ADDRESSU, (flags & gxCanvas::CANVAS_TEX_CLAMPU) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
@@ -360,15 +364,15 @@ void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
 	setTSS(n, D3DTSS_ALPHAOP, (flags & gxCanvas::CANVAS_TEX_ALPHA) ? D3DTOP_MODULATE : D3DTOP_SELECTARG2);
 }
 
-int  gxScene::hwTexUnits() {
+int  gxSceneD3D9::hwTexUnits() {
 	return tex_stages;
 }
 
-int  gxScene::gfxDriverCaps3D() {
+int  gxSceneD3D9::gfxDriverCaps3D() {
 	return caps_level;
 }
 
-void gxScene::setZMode() {
+void gxSceneD3D9::setZMode() {
 	switch(zmode) {
 		case ZMODE_NORMAL:
 			setRS(D3DRS_ZENABLE, D3DZB_TRUE);
@@ -385,7 +389,7 @@ void gxScene::setZMode() {
 	}
 }
 
-void gxScene::setLights() {
+void gxSceneD3D9::setLights() {
 	if(fx & FX_FULLBRIGHT) {
 		//no lights on
 		for(int n = 0; n < _curLights.size(); ++n) dir3dDev->LightEnable(n, false);
@@ -393,7 +397,7 @@ void gxScene::setLights() {
 	else if(fx & FX_CONDLIGHT) {
 		//some lights on
 		for(int n = 0; n < _curLights.size(); ++n) {
-			gxLight* light = _curLights[n];
+			gxLightD3D9* light = _curLights[n];
 			bool enable = light->d3d_light.Type != D3DLIGHT_DIRECTIONAL;
 			dir3dDev->LightEnable(n, enable);
 		}
@@ -404,12 +408,12 @@ void gxScene::setLights() {
 	}
 }
 
-void gxScene::setAmbient() {
+void gxSceneD3D9::setAmbient() {
 	int n = (fx & FX_FULLBRIGHT) ? 0xffffff : ((fx & FX_CONDLIGHT) ? ambient2 : ambient);
 	setRS(D3DRS_AMBIENT, n);
 }
 
-void gxScene::setFogMode() {
+void gxSceneD3D9::setFogMode() {
 	if(!!(fx & FX_NOFOG)) {
 		setRS(D3DRS_FOGENABLE, false);
 		return;
@@ -433,7 +437,7 @@ void gxScene::setFogMode() {
 	}
 }
 
-void gxScene::setTriCull() {
+void gxSceneD3D9::setTriCull() {
 	if(fx & FX_DOUBLESIDED) {
 		setRS(D3DRS_CULLMODE, D3DCULL_NONE);
 	}
@@ -445,7 +449,7 @@ void gxScene::setTriCull() {
 	}
 }
 
-void gxScene::setHWMultiTex(bool e) {
+void gxSceneD3D9::setHWMultiTex(bool e) {
 	for(int n = 0; n < 8; ++n) {
 		setTSS(n, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		setTSS(n, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
@@ -458,50 +462,50 @@ void gxScene::setHWMultiTex(bool e) {
 	n_texs = 0;
 }
 
-void gxScene::setWBuffer(bool n) {
+void gxSceneD3D9::setWBuffer(bool n) {
 	if(n == wbuffer || !can_wb) return;
 	wbuffer = n; setZMode();
 }
 
-void gxScene::setDither(bool n) {
+void gxSceneD3D9::setDither(bool n) {
 	if(n == dither) return;
 	dither = n; setRS(D3DRS_DITHERENABLE, dither ? true : false);
 }
 
-void gxScene::setAntialias(bool n) {
+void gxSceneD3D9::setAntialias(bool n) {
 	antialias = n;
 	if (graphics && graphics->runtime) {
 		graphics->runtime->setAntialiasRequest(n);
 	}
 }
 
-void gxScene::setWireframe(bool n) {
+void gxSceneD3D9::setWireframe(bool n) {
 	if(n == wireframe) return;
 	wireframe = n;
 }
 
-void gxScene::setFlippedTris(bool n) {
+void gxSceneD3D9::setFlippedTris(bool n) {
 	if(n == flipped) return;
 	flipped = n; setTriCull();
 }
 
-void gxScene::setAmbient(const float rgb[]) {
+void gxSceneD3D9::setAmbient(const float rgb[]) {
 	int n = (int(rgb[0] * 255.0f) << 16) | (int(rgb[1] * 255.0f) << 8) | int(rgb[2] * 255.0f);
 	ambient = n; setAmbient();
 }
 
-void gxScene::setAmbient2(const float rgb[]) {
+void gxSceneD3D9::setAmbient2(const float rgb[]) {
 	int n = (int(rgb[0] * 255.0f) << 16) | (int(rgb[1] * 255.0f) << 8) | int(rgb[2] * 255.0f);
 	ambient2 = n; setAmbient();
 }
 
-void gxScene::setViewport(int x, int y, int w, int h) {
+void gxSceneD3D9::setViewport(int x, int y, int w, int h) {
 	if (x == (int)viewport.X && y == (int)viewport.Y && w == (int)viewport.Width && h == (int)viewport.Height) return;
 	viewport.X = x; viewport.Y = y; viewport.Width = w; viewport.Height = h;
 	dir3dDev->SetViewport(&viewport);
 }
 
-void gxScene::setOrthoProj(float nr, float fr, float w, float h) {
+void gxSceneD3D9::setOrthoProj(float nr, float fr, float w, float h) {
 	if(ortho_proj && nr == frustum_nr && fr == frustum_fr && w == frustum_w && h == frustum_h) return;
 	frustum_nr = nr; frustum_fr = fr; frustum_w = w; frustum_h = h; ortho_proj = true;
 	float W = 2 / w;
@@ -517,7 +521,7 @@ void gxScene::setOrthoProj(float nr, float fr, float w, float h) {
 	dir3dDev->SetTransform(D3DTS_PROJECTION, &projmatrix);
 }
 
-void gxScene::setPerspProj(float nr, float fr, float w, float h) {
+void gxSceneD3D9::setPerspProj(float nr, float fr, float w, float h) {
 	if(!ortho_proj && nr == frustum_nr && fr == frustum_fr && w == frustum_w && h == frustum_h) return;
 	frustum_nr = nr; frustum_fr = fr; frustum_w = w; frustum_h = h; ortho_proj = false;
 	float W = 2 * nr / w;
@@ -533,36 +537,36 @@ void gxScene::setPerspProj(float nr, float fr, float w, float h) {
 	dir3dDev->SetTransform(D3DTS_PROJECTION, &projmatrix);
 }
 
-void gxScene::setFogColor(const float rgb[3]) {
+void gxSceneD3D9::setFogColor(const float rgb[3]) {
 	int n = (int(rgb[0] * 255.0f) << 16) | (int(rgb[1] * 255.0f) << 8) | int(rgb[2] * 255.0f);
 	if(n == fogcolor) return;
 	fogcolor = n; setRS(D3DRS_FOGCOLOR, fogcolor);
 }
 
-void gxScene::setFogRange(float nr, float fr) {
+void gxSceneD3D9::setFogRange(float nr, float fr) {
 	if(nr == fogrange_nr && fr == fogrange_fr) return;
 	fogrange_nr = nr; fogrange_fr = fr;
 	setRS(D3DRS_FOGSTART, *(DWORD*)&fogrange_nr);
 	setRS(D3DRS_FOGEND, *(DWORD*)&fogrange_fr);
 }
 
-void gxScene::setFogDensity(float den) {
+void gxSceneD3D9::setFogDensity(float den) {
 	if(den == fog_density) return;
 	fog_density = den;
 	setRS(D3DRS_FOGDENSITY, *(DWORD*)&fog_density);
 }
 
-void gxScene::setFogMode(int n) {
+void gxSceneD3D9::setFogMode(int n) {
 	if(n == fogmode) return;
 	fogmode = n; setFogMode();
 }
 
-void gxScene::setZMode(int n) {
+void gxSceneD3D9::setZMode(int n) {
 	if(n == zmode) return;
 	zmode = n; setZMode();
 }
 
-void gxScene::setViewMatrix(const Matrix* m) {
+void gxSceneD3D9::setViewMatrix(const Matrix* m) {
 	D3DMATRIX prev = viewmatrix;
 
 	if (m) {
@@ -585,11 +589,11 @@ void gxScene::setViewMatrix(const Matrix* m) {
 	dir3dDev->SetTransform(D3DTS_VIEW, &viewmatrix);
 }
 
-void gxScene::setEyePosition(const float pos[3]) {
+void gxSceneD3D9::setEyePosition(const float pos[3]) {
 	eyePos[0] = pos[0]; eyePos[1] = pos[1]; eyePos[2] = pos[2];
 }
 
-void gxScene::setWorldMatrix(const Matrix* m) {
+void gxSceneD3D9::setWorldMatrix(const Matrix* m) {
 	D3DMATRIX prev = worldmatrix;
 
 	if (m) {
@@ -608,7 +612,7 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 	dir3dDev->SetTransform(D3DTS_WORLD, &worldmatrix);
 }
 
-void gxScene::setRenderState(const RenderState& rs) {
+void gxSceneD3D9::setRenderState(const RenderState& rs) {
 	setEffect(rs.effect);
 
 	int fxChanged = rs.fx ^ fx;
@@ -710,8 +714,8 @@ void gxScene::setRenderState(const RenderState& rs) {
 		const RenderState::TexState& ts = rs.tex_states[k];
 		if(!ts.canvas || !ts.blend) continue;
 		bool settex = false;
-		ts.canvas->getTexSurface();	//force mipmap rebuild
-		if(ts.canvas != hw->canvas) { hw->canvas = ts.canvas; settex = true; }
+		static_cast<gxCanvasD3D9*>(ts.canvas)->getTexSurface();	//force mipmap rebuild
+		if(ts.canvas != hw->canvas) { hw->canvas = static_cast<gxCanvasD3D9*>(ts.canvas); settex = true; }
 		if(ts.blend != hw->blend) { hw->blend = ts.blend; settex = true; }
 		if(ts.flags != hw->flags) { hw->flags = ts.flags; settex = true; }
 		if(ts.bumpEnvMat[0][0] != hw->bumpEnvMat[0][0]) { hw->bumpEnvMat[0][0] = ts.bumpEnvMat[0][0]; settex = true; }
@@ -750,7 +754,7 @@ void gxScene::setRenderState(const RenderState& rs) {
 	lastRenderStateValid = true;
 }
 
-bool gxScene::begin(const std::vector<gxLight*>& lights) {
+bool gxSceneD3D9::begin(const std::vector<gxLight*>& lights) {
 
 	if(dir3dDev->BeginScene() != D3D_OK) return false;
 
@@ -775,10 +779,9 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	}
 
 	//set light states
-	_curLights.clear();
 	for(n = 0; n < max_lights; ++n) {
 		if(n < lights.size()) {
-			_curLights.push_back(lights[n]);
+			_curLights.push_back(static_cast<gxLightD3D9*>(lights[n]));
 			dir3dDev->SetLight(n, &_curLights[n]->d3d_light);
 		}
 		else {
@@ -804,14 +807,15 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	return true;
 }
 
-void gxScene::clear(const float rgb[3], float alpha, float z, bool clear_argb, bool clear_z) {
+void gxSceneD3D9::clear(const float rgb[3], float alpha, float z, bool clear_argb, bool clear_z) {
 	if(!clear_argb && !clear_z) return;
 	int flags = (clear_argb ? D3DCLEAR_TARGET : 0) | (clear_z ? D3DCLEAR_ZBUFFER : 0);
 	unsigned argb = (int(alpha * 255.0f) << 24) | (int(rgb[0] * 255.0f) << 16) | (int(rgb[1] * 255.0f) << 8) | int(rgb[2] * 255.0f);
 	dir3dDev->Clear(0, 0, flags, argb, z, 0);
 }
 
-void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+void gxSceneD3D9::render(gxMesh* mesh_base, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+	gxMeshD3D9* mesh = static_cast<gxMeshD3D9*>(mesh_base);
 	if (currentEffect) {
 		UINT passes;
 		if (currentEffect->begin(&passes)) {
@@ -869,7 +873,7 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 	setTexState(0, texstate[0], true);
 }
 
-void gxScene::setSkinShaderConstants() {
+void gxSceneD3D9::setSkinShaderConstants() {
 	IDirect3DDevice9* dev = dir3dDev;
 
 	D3DXMATRIX viewProj;
@@ -884,7 +888,7 @@ void gxScene::setSkinShaderConstants() {
 
 	int active = 0;
 	for (int i = 0; i < n; ++i) {
-		gxLight* light = _curLights[i];
+		gxLightD3D9* light = _curLights[i];
 		bool enabled;
 		if (fx & FX_FULLBRIGHT) enabled = false;
 		else if (fx & FX_CONDLIGHT) enabled = (light->d3d_light.Type != D3DLIGHT_DIRECTIONAL);
@@ -939,28 +943,29 @@ void gxScene::setSkinShaderConstants() {
 	dev->SetVertexShaderConstantF(231, eye, 1);
 }
 
-void gxScene::renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt) {
+void gxSceneD3D9::renderSkinned(gxMesh* mesh_base, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt) {
+	gxMeshD3D9* mesh = static_cast<gxMeshD3D9*>(mesh_base);
 	setSkinShaderConstants();
 	mesh->renderSkinned(first_vert, vert_cnt, first_tri, tri_cnt, bone_data, bone_cnt);
 	tris_drawn += tri_cnt;
 }
 
-void gxScene::end() {
+void gxSceneD3D9::end() {
 	dir3dDev->EndScene();
 	RECT r = { (LONG)viewport.X, (LONG)viewport.Y, (LONG)(viewport.X + viewport.Width), (LONG)(viewport.Y + viewport.Height) };
 	target->damage(r);
 }
 
-gxLight* gxScene::createLight(int flags) {
-	gxLight* l = new gxLight(this, flags);
+gxLight* gxSceneD3D9::createLight(int flags) {
+	gxLightD3D9* l = new gxLightD3D9(this, flags);
 	_allLights.insert(l);
 	return l;
 }
 
-void gxScene::freeLight(gxLight* l) {
-	_allLights.erase(l);
+void gxSceneD3D9::freeLight(gxLight* l) {
+	_allLights.erase(static_cast<gxLightD3D9*>(l));
 }
 
-int gxScene::getTrianglesDrawn()const {
+int gxSceneD3D9::getTrianglesDrawn()const {
 	return tris_drawn;
 }

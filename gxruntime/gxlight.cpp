@@ -3,7 +3,7 @@
 #include "gxscene.h"
 #include "gxgraphics.h"
 
-gxLight::gxLight(gxScene* s, int type) :
+gxLightD3D9::gxLightD3D9(gxSceneD3D9* s, int type) :
     scene(s) {
 
     memset(&d3d_light, 0, sizeof(d3d_light));
@@ -30,26 +30,26 @@ gxLight::gxLight(gxScene* s, int type) :
     setRange(1000);
 }
 
-gxLight::~gxLight() {
+gxLightD3D9::~gxLightD3D9() {
 }
 
-void gxLight::setRange(float r) {
+void gxLightD3D9::setRange(float r) {
     d3d_light.Attenuation1 = 1.0f / r;
 }
 
-void gxLight::setPosition(const float pos[3]) {
+void gxLightD3D9::setPosition(const float pos[3]) {
     d3d_light.Position.x = pos[0];
     d3d_light.Position.y = pos[1];
     d3d_light.Position.z = pos[2];
 }
 
-void gxLight::setDirection(const float dir[3]) {
+void gxLightD3D9::setDirection(const float dir[3]) {
     d3d_light.Direction.x = dir[0];
     d3d_light.Direction.y = dir[1];
     d3d_light.Direction.z = dir[2];
 }
 
-void gxLight::setConeAngles(float inner, float outer) {
+void gxLightD3D9::setConeAngles(float inner, float outer) {
     d3d_light.Theta = inner;
     d3d_light.Phi = outer;
 }

@@ -3,7 +3,7 @@
 
 #include "model.h"
 #include "brush.h"
-#include "../gxruntime/gxmesh.h"
+#include "../gfx/gfx.h"
 
 class Sprite : public Model {
 public:

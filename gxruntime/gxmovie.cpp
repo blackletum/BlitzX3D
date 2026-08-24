@@ -9,7 +9,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 
-gxMovie::gxMovie(gxGraphics* g, const std::string& file) : gfx(g), filename(file) {
+gxMovieD3D9::gxMovieD3D9(gxGraphicsD3D9* g, const std::string& file) : gfx(g), filename(file) {
 	if (!openStream(file)) {
 		valid = false;
 		playing = false;
@@ -18,10 +18,10 @@ gxMovie::gxMovie(gxGraphics* g, const std::string& file) : gfx(g), filename(file
 	valid = true;
 	playing = true;
 	quit_requested = false;
-	decode_thread = std::thread(&gxMovie::decodeThreadMain, this);
+	decode_thread = std::thread(&gxMovieD3D9::decodeThreadMain, this);
 }
 
-gxMovie::~gxMovie() {
+gxMovieD3D9::~gxMovieD3D9() {
 	quit_requested = true;
 	if (decode_thread.joinable()) { decode_thread.join();}
 	closeStream();
@@ -29,7 +29,7 @@ gxMovie::~gxMovie() {
 	if (scratch_back) gfx->freeCanvas(scratch_back);
 }
 
-bool gxMovie::openStream(const std::string& file) {
+bool gxMovieD3D9::openStream(const std::string& file) {
 	fmt_ctx = nullptr;
 	if (avformat_open_input(&fmt_ctx, file.c_str(), nullptr, nullptr) != 0) {
 		return false;
@@ -110,13 +110,13 @@ bool gxMovie::openStream(const std::string& file) {
 	return true;
 }
 
-void gxMovie::closeStream() {
+void gxMovieD3D9::closeStream() {
 	if (sws_ctx) { sws_freeContext(sws_ctx); sws_ctx = nullptr; }
 	if (codec_ctx) { avcodec_free_context(&codec_ctx); codec_ctx = nullptr; }
 	if (fmt_ctx) { avformat_close_input(&fmt_ctx); fmt_ctx = nullptr; }
 }
 
-void gxMovie::decodeThreadMain() {
+void gxMovieD3D9::decodeThreadMain() {
 	AVFrame* frame = av_frame_alloc();
 	AVFrame* rgba_frame = av_frame_alloc();
 	AVPacket* packet = av_packet_alloc();
@@ -201,7 +201,8 @@ void gxMovie::decodeThreadMain() {
 	av_packet_free(&packet);
 }
 
-bool gxMovie::draw(gxCanvas* dest, int x, int y, int w, int h) {
+bool gxMovieD3D9::draw(gxCanvas* dest_base, int x, int y, int w, int h) {
+	gxCanvasD3D9* dest = static_cast<gxCanvasD3D9*>(dest_base);
 	if (!valid.load()) return false;
 	bool got_new_frame = false;
 	{

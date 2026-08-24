@@ -122,7 +122,7 @@ static inline void fillRectRows(unsigned char* base, int basePitch, int w, int h
     }
 }
 
-void gxCanvas::fillRect(const RECT& r, unsigned argb) {
+void gxCanvasD3D9::fillRect(const RECT& r, unsigned argb) {
     if (locked_cnt > 0) {
         int w = r.right - r.left;
         int h = r.bottom - r.top;
@@ -166,7 +166,7 @@ struct QuadVertex {
 };
 static const DWORD QUAD_FVF = D3DFVF_XYZRHW | D3DFVF_TEX1;
 
-gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
+gxCanvasD3D9::gxCanvasD3D9(gxGraphicsD3D9* g, IDirect3DSurface9* s, int f) :
     graphics(g), plain_surf(s), tex(nullptr), cube_tex(nullptr), surf(s), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
@@ -192,7 +192,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     setViewport(0, 0, getWidth(), getHeight());
 }
 
-gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
+gxCanvasD3D9::gxCanvasD3D9(gxGraphicsD3D9* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
@@ -222,7 +222,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     if (flags & gxCanvas::CANVAS_TEX_MIPMAP) ddUtil::buildMipMaps(tex);
 }
 
-gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
+gxCanvasD3D9::gxCanvasD3D9(gxGraphicsD3D9* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
@@ -259,7 +259,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     setViewport(0, 0, getWidth(), getHeight());
 }
 
-gxCanvas::~gxCanvas() {
+gxCanvasD3D9::~gxCanvasD3D9() {
     delete[] cm_mask;
     if (locked_cnt) surf->UnlockRect();
     if (t_surf) t_surf->Release();
@@ -277,7 +277,7 @@ gxCanvas::~gxCanvas() {
     if (plain_surf && !tex && !cube_tex) { plain_surf->Release(); plain_surf = nullptr; }
 }
 
-void gxCanvas::backup() {
+void gxCanvasD3D9::backup() {
     if (flags & CANVAS_TEX_CUBE) return;
     if (!surf) return;
 
@@ -312,14 +312,14 @@ void gxCanvas::backup() {
     }
 }
 
-void gxCanvas::restoreZBuffer() {
+void gxCanvasD3D9::restoreZBuffer() {
 	if (z_surf) {
 		releaseZBuffer();
 		attachZBuffer();
 	}
 }
 
-void gxCanvas::restore() {
+void gxCanvasD3D9::restore() {
     if (!t_surf) return;
 
     D3DSURFACE_DESC tdesc;
@@ -355,17 +355,17 @@ void gxCanvas::restore() {
     surf = newSurf;
 }
 
-IDirect3DSurface9* gxCanvas::getSurface() const {
+IDirect3DSurface9* gxCanvasD3D9::getSurface() const {
     return surf;
 }
 
-IDirect3DBaseTexture9* gxCanvas::getTexture() const {
+IDirect3DBaseTexture9* gxCanvasD3D9::getTexture() const {
     if (cube_tex) return cube_tex;
     if (tex)      return tex;
     return nullptr;
 }
 
-IDirect3DBaseTexture9* gxCanvas::getTexSurface() const {
+IDirect3DBaseTexture9* gxCanvasD3D9::getTexSurface() const {
     if (mod_cnt != remip_cnt && tex && (flags & CANVAS_TEX_MIPMAP) && mipmapNeeded) {
         ddUtil::buildMipMaps(tex);
     }
@@ -373,22 +373,22 @@ IDirect3DBaseTexture9* gxCanvas::getTexSurface() const {
     return getTexture();
 }
 
-bool gxCanvas::clip(RECT* d) const {
+bool gxCanvasD3D9::clip(RECT* d) const {
     return ::clip(viewport, d);
 }
-bool gxCanvas::clip(RECT* d, RECT* s) const {
+bool gxCanvasD3D9::clip(RECT* d, RECT* s) const {
     return ::clip(viewport, d, s);
 }
 
-void gxCanvas::set2DEffect(gxEffect* effect) {
-    effect2D = effect;
+void gxCanvasD3D9::set2DEffect(gxEffect* effect) {
+	effect2D = static_cast<gxEffectD3D9*>(effect);
 }
 
-gxEffect* gxCanvas::get2DEffect() const {
-    return effect2D;
+gxEffect* gxCanvasD3D9::get2DEffect() const {
+	return effect2D;
 }
 
-void gxCanvas::updateBitMask(const RECT& r) const {
+void gxCanvasD3D9::updateBitMask(const RECT& r) const {
     int w = r.right - r.left; if (w <= 0) return;
     int h = r.bottom - r.top; if (h <= 0) return;
 
@@ -419,10 +419,10 @@ void gxCanvas::updateBitMask(const RECT& r) const {
     unlock();
 }
 
-void gxCanvas::setModify(int n) { mod_cnt = n; }
-int  gxCanvas::getModify() const { return mod_cnt; }
+void gxCanvasD3D9::setModify(int n) { mod_cnt = n; }
+int  gxCanvasD3D9::getModify() const { return mod_cnt; }
 
-bool gxCanvas::attachZBuffer() {
+bool gxCanvasD3D9::attachZBuffer() {
     if (z_surf) return true;
     D3DSURFACE_DESC desc;
     surf->GetDesc(&desc);
@@ -437,41 +437,41 @@ bool gxCanvas::attachZBuffer() {
     return true;
 }
 
-void gxCanvas::releaseZBuffer() {
+void gxCanvasD3D9::releaseZBuffer() {
     if (!z_surf) return;
     z_surf->Release();
     z_surf = nullptr;
 }
 
-void gxCanvas::damage(const RECT& r) const {
+void gxCanvasD3D9::damage(const RECT& r) const {
     ++mod_cnt;
     if (cm_mask) updateBitMask(r);
 }
 
-void gxCanvas::setFont(gxFont* f) { font = f; }
+void gxCanvasD3D9::setFont(gxFont* f) { font = static_cast<gxFontD3D9*>(f); }
 
-void gxCanvas::setMask(unsigned argb) { mask_surf = format.fromARGB(argb); has_mask = true; }
+void gxCanvasD3D9::setMask(unsigned argb) { mask_surf = format.fromARGB(argb); has_mask = true; }
 
-void gxCanvas::setColor(unsigned argb) { color_argb = argb; color_surf = format.fromARGB(argb); }
+void gxCanvasD3D9::setColor(unsigned argb) { color_argb = argb; color_surf = format.fromARGB(argb); }
 
-void gxCanvas::setClsColor(unsigned argb) { clsColor_surf = format.fromARGB(argb); }
+void gxCanvasD3D9::setClsColor(unsigned argb) { clsColor_surf = format.fromARGB(argb); }
 
-void gxCanvas::setOrigin(int x, int y) { origin_x = x; origin_y = y; }
+void gxCanvasD3D9::setOrigin(int x, int y) { origin_x = x; origin_y = y; }
 
-void gxCanvas::setHandle(int x, int y) { handle_x = x; handle_y = y; }
+void gxCanvasD3D9::setHandle(int x, int y) { handle_x = x; handle_y = y; }
 
-void gxCanvas::setViewport(int x, int y, int w, int h) {
+void gxCanvasD3D9::setViewport(int x, int y, int w, int h) {
     Rect r(x, y, w, h);
     if (!::clip(clip_rect, &r)) r = Rect(0, 0, 0, 0);
     viewport = r;
 }
 
-void gxCanvas::cls() {
+void gxCanvasD3D9::cls() {
     fillRect(viewport, format.toARGB(clsColor_surf));
     damage(viewport);
 }
 
-void gxCanvas::plot(int x, int y) {
+void gxCanvasD3D9::plot(int x, int y) {
     x += origin_x; if (x < viewport.left || x >= viewport.right)  return;
     y += origin_y; if (y < viewport.top || y >= viewport.bottom) return;
     Rect dest(x, y, 1, 1);
@@ -479,7 +479,7 @@ void gxCanvas::plot(int x, int y) {
     damage(dest);
 }
 
-void gxCanvas::line(int x0, int y0, int x1, int y1) {
+void gxCanvasD3D9::line(int x0, int y0, int x1, int y1) {
     int ddf, padj, sadj;
     int dx, dy, sx, sy, ax, ay;
     x0 += origin_x; y0 += origin_y;
@@ -523,7 +523,7 @@ void gxCanvas::line(int x0, int y0, int x1, int y1) {
     unlock();
 }
 
-void gxCanvas::rect(int x, int y, int w, int h, bool solid) {
+void gxCanvasD3D9::rect(int x, int y, int w, int h, bool solid) {
     x += origin_x; y += origin_y;
     Rect dest(x, y, w, h);
     if (!clip(&dest)) return;
@@ -540,7 +540,7 @@ void gxCanvas::rect(int x, int y, int w, int h, bool solid) {
     damage(dest);
 }
 
-void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
+void gxCanvasD3D9::oval(int x1, int y1, int w, int h, bool solid) {
     x1 += origin_x; y1 += origin_y;
     Rect dest(x1, y1, w, h);
     if (!clip(&dest)) return;
@@ -585,7 +585,7 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
     damage(dest);
 }
 
-static void drawQuadWithEffect(IDirect3DDevice9* dev, gxEffect* effect, IDirect3DTexture9* tex, const RECT& dst, const RECT& src, int texW, int texH, bool useAlpha = false, unsigned color_argb = 0xFFFFFFFF) {
+static void drawQuadWithEffect(IDirect3DDevice9* dev, gxEffectD3D9* effect, IDirect3DTexture9* tex, const RECT& dst, const RECT& src, int texW, int texH, bool useAlpha = false, unsigned color_argb = 0xFFFFFFFF) {
     D3DXMATRIX proj, view, world;
     D3DXMatrixIdentity(&world);
     D3DXMatrixIdentity(&view);
@@ -638,7 +638,7 @@ static void drawQuadWithEffect(IDirect3DDevice9* dev, gxEffect* effect, IDirect3
     }
 }
 
-static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src, unsigned maskRGB) {
+static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvasD3D9* src, unsigned maskRGB) {
     if (src->blit_tex && src->blit_tex_mod_cnt == src->mod_cnt && src->blit_tex_mask == maskRGB)
         return src->blit_tex;
 
@@ -849,7 +849,7 @@ static bool isBoundAsRenderTarget(IDirect3DDevice9* dev, IDirect3DSurface9* s) {
     return same;
 }
 
-void gxCanvas::beginBlitBatch() const {
+void gxCanvasD3D9::beginBlitBatch() const {
     if (blit_batch_depth++ > 0) return;
 
     IDirect3DDevice9* dev = graphics ? graphics->dir3dDev : nullptr;
@@ -871,7 +871,7 @@ void gxCanvas::beginBlitBatch() const {
     blit_batch_active = true;
 }
 
-void gxCanvas::endBlitBatch() const {
+void gxCanvasD3D9::endBlitBatch() const {
     if (blit_batch_depth == 0) return;
     if (--blit_batch_depth > 0) return;
 
@@ -886,7 +886,7 @@ void gxCanvas::endBlitBatch() const {
     }
 }
 
-static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const RECT& src_r, bool solid) {
+static void cpuBlit(gxCanvasD3D9* dest, const RECT& dest_r, gxCanvasD3D9* src, const RECT& src_r, bool solid) {
     D3DSURFACE_DESC destDesc;
     bool destIsSysMem = SUCCEEDED(dest->surf->GetDesc(&destDesc)) && destDesc.Pool == D3DPOOL_SYSTEMMEM;
 
@@ -975,9 +975,10 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
     dest->damage(dest_r);
 }
 
-void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
+void gxCanvasD3D9::blit(int x, int y, gxCanvas* src_base, int src_x, int src_y,
     int src_w, int src_h, bool solid)
 {
+    gxCanvasD3D9* src = static_cast<gxCanvasD3D9*>(src_base);
     x += origin_x - src->handle_x;
     y += origin_y - src->handle_y;
 
@@ -1044,10 +1045,11 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
     if (ownBatch) endBlitBatch();
 }
 
-void gxCanvas::blitstretch(int x, int y, int w, int h,
-    gxCanvas* src, int src_x, int src_y,
+void gxCanvasD3D9::blitstretch(int x, int y, int w, int h,
+    gxCanvas* src_base, int src_x, int src_y,
     int src_w, int src_h, bool solid)
 {
+    gxCanvasD3D9* src = static_cast<gxCanvasD3D9*>(src_base);
     x += origin_x - src->handle_x;
     y += origin_y - src->handle_y;
 
@@ -1151,7 +1153,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     damage(dest_r);
 }
 
-static void cpuBlitAlpha(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const RECT& src_r, unsigned color_argb) {
+static void cpuBlitAlpha(gxCanvasD3D9* dest, const RECT& dest_r, gxCanvasD3D9* src, const RECT& src_r, unsigned color_argb) {
     int dw = dest_r.right - dest_r.left;
     int dh = dest_r.bottom - dest_r.top;
 
@@ -1192,9 +1194,10 @@ static void cpuBlitAlpha(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, cons
     dest->damage(dest_r);
 }
 
-void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
+void gxCanvasD3D9::blitAlpha(int x, int y, gxCanvas* src_base,
     int src_x, int src_y, int src_w, int src_h,
     unsigned color_argb, bool filter) {
+    gxCanvasD3D9* src = static_cast<gxCanvasD3D9*>(src_base);
     x += origin_x - src->handle_x;
     y += origin_y - src->handle_y;
 
@@ -1268,7 +1271,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     if (ownBatch) endBlitBatch();
 }
 
-void gxCanvas::text(int x, int y, const std::string& t) {
+void gxCanvasD3D9::text(int x, int y, const std::string& t) {
     int ty = y + origin_y;
     if (ty >= viewport.bottom) return;
     if (ty + font->getHeight() <= viewport.top) return;
@@ -1291,23 +1294,24 @@ void gxCanvas::text(int x, int y, const std::string& t) {
     }
 }
 
-int gxCanvas::getWidth()  const { return logical_w; }
-int gxCanvas::getHeight() const { return logical_h; }
-int gxCanvas::getDepth()  const { return format.getDepth(); }
+int gxCanvasD3D9::getWidth()  const { return logical_w; }
+int gxCanvasD3D9::getHeight() const { return logical_h; }
+int gxCanvasD3D9::getDepth()  const { return format.getDepth(); }
 
-void gxCanvas::getOrigin(int* x, int* y)  const { *x = origin_x; *y = origin_y; }
-void gxCanvas::getHandle(int* x, int* y)  const { *x = handle_x; *y = handle_y; }
+void gxCanvasD3D9::getOrigin(int* x, int* y)  const { *x = origin_x; *y = origin_y; }
+void gxCanvasD3D9::getHandle(int* x, int* y)  const { *x = handle_x; *y = handle_y; }
 
-void gxCanvas::getViewport(int* x, int* y, int* w, int* h) const {
+void gxCanvasD3D9::getViewport(int* x, int* y, int* w, int* h) const {
     *x = viewport.left; *y = viewport.top;
     *w = viewport.right - viewport.left; *h = viewport.bottom - viewport.top;
 }
 
-unsigned gxCanvas::getMask()     const { return format.toARGB(mask_surf); }
-unsigned gxCanvas::getColor()    const { return format.toARGB(color_surf); }
-unsigned gxCanvas::getClsColor() const { return format.toARGB(clsColor_surf); }
+unsigned gxCanvasD3D9::getMask()     const { return format.toARGB(mask_surf); }
+unsigned gxCanvasD3D9::getColor()    const { return format.toARGB(color_surf); }
+unsigned gxCanvasD3D9::getClsColor() const { return format.toARGB(clsColor_surf); }
 
-bool gxCanvas::collide(int x1, int y1, const gxCanvas* i2, int x2, int y2, bool solid) const {
+bool gxCanvasD3D9::collide(int x1, int y1, const gxCanvas* i2_base, int x2, int y2, bool solid) const {
+    const gxCanvasD3D9* i2 = static_cast<const gxCanvasD3D9*>(i2_base);
     x1 -= handle_x; x2 -= i2->handle_x;
     if (x1 + clip_rect.right <= x2 || x1 >= x2 + i2->clip_rect.right) return false;
     y1 -= handle_y; y2 -= i2->handle_y;
@@ -1315,7 +1319,7 @@ bool gxCanvas::collide(int x1, int y1, const gxCanvas* i2, int x2, int y2, bool 
     if (solid) return true;
     if (!cm_mask) { cm_mask = new unsigned[cm_pitch * clip_rect.bottom]; updateBitMask(clip_rect); }
     if (!i2->cm_mask) { i2->cm_mask = new unsigned[i2->cm_pitch * i2->clip_rect.bottom]; i2->updateBitMask(i2->clip_rect); }
-    const gxCanvas* i1 = this;
+    const gxCanvasD3D9* i1 = this;
     if (x1 > x2) { std::swap(x1, x2); std::swap(y1, y2); std::swap(i1, i2); }
     Rect r1, r2, ir;
     r1.left = x1; r1.top = y1; r1.right = x1 + i1->clip_rect.right; r1.bottom = y1 + i1->clip_rect.bottom;
@@ -1339,7 +1343,7 @@ bool gxCanvas::collide(int x1, int y1, const gxCanvas* i2, int x2, int y2, bool 
     return false;
 }
 
-bool gxCanvas::rect_collide(int x1, int y1, int x2, int y2, int w2, int h2, bool solid) const {
+bool gxCanvasD3D9::rect_collide(int x1, int y1, int x2, int y2, int w2, int h2, bool solid) const {
     x1 -= handle_x; if (x1 + clip_rect.right <= x2 || x1 >= x2 + w2) return false;
     y1 -= handle_y; if (y1 + clip_rect.bottom <= y2 || y1 >= y2 + h2) return false;
     if (solid) return true;
@@ -1363,7 +1367,7 @@ bool gxCanvas::rect_collide(int x1, int y1, int x2, int y2, int w2, int h2, bool
     return false;
 }
 
-bool gxCanvas::lock() const {
+bool gxCanvasD3D9::lock() const {
     if (locked_cnt == 0) {
         D3DSURFACE_DESC desc;
         HRESULT hr = surf->GetDesc(&desc);
@@ -1413,7 +1417,7 @@ bool gxCanvas::lock() const {
     return true;
 }
 
-void gxCanvas::unlock() const {
+void gxCanvasD3D9::unlock() const {
     if (locked_cnt == 0) return;
 
     if (locked_cnt == 1) {
@@ -1434,7 +1438,7 @@ void gxCanvas::unlock() const {
     --locked_cnt;
 }
 
-void gxCanvas::setPixel(int x, int y, unsigned argb) {
+void gxCanvasD3D9::setPixel(int x, int y, unsigned argb) {
     x += origin_x; if (x < viewport.left || x >= viewport.right)  return;
     y += origin_y; if (y < viewport.top || y >= viewport.bottom) return;
     lock();
@@ -1442,7 +1446,7 @@ void gxCanvas::setPixel(int x, int y, unsigned argb) {
     unlock();
 }
 
-unsigned gxCanvas::getPixel(int x, int y) const {
+unsigned gxCanvasD3D9::getPixel(int x, int y) const {
     x += origin_x; if (x < viewport.left || x >= viewport.right)  return format.toARGB(mask_surf);
     y += origin_y; if (y < viewport.top || y >= viewport.bottom) return format.toARGB(mask_surf);
     lock();
@@ -1451,7 +1455,8 @@ unsigned gxCanvas::getPixel(int x, int y) const {
     return p;
 }
 
-void gxCanvas::copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y) {
+void gxCanvasD3D9::copyPixelFast(int x, int y, gxCanvas* src_base, int src_x, int src_y) {
+    gxCanvasD3D9* src = static_cast<gxCanvasD3D9*>(src_base);
     if (format.getDepth() == src->format.getDepth()) {
         switch (format.getDepth()) {
         case 16: *(short*)(locked_surf + y * locked_pitch + x * 2) = *(short*)(src->locked_surf + src_y * src->locked_pitch + src_x * 2); ++mod_cnt; return;
@@ -1468,7 +1473,8 @@ void gxCanvas::copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y) 
     ++mod_cnt;
 }
 
-void gxCanvas::copyPixel(int x, int y, gxCanvas* src, int src_x, int src_y) {
+void gxCanvasD3D9::copyPixel(int x, int y, gxCanvas* src_base, int src_x, int src_y) {
+    gxCanvasD3D9* src = static_cast<gxCanvasD3D9*>(src_base);
     x += origin_x; if (x < viewport.left || x >= viewport.right) return;
     y += origin_y; if (y < viewport.top || y >= viewport.bottom) return;
     src_x += src->origin_x; if (src_x < src->viewport.left || src_x >= src->viewport.right) return;
@@ -1478,9 +1484,9 @@ void gxCanvas::copyPixel(int x, int y, gxCanvas* src, int src_x, int src_y) {
     src->unlock(); unlock();
 }
 
-void gxCanvas::setCubeMode(int mode) { cube_mode = mode; }
+void gxCanvasD3D9::setCubeMode(int mode) { cube_mode = mode; }
 
-void gxCanvas::setCubeFace(int face) {
+void gxCanvasD3D9::setCubeFace(int face) {
     if (face >= 0 && face < 6 && cube_surfs[face])
         surf = cube_surfs[face];
 }

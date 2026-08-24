@@ -23,7 +23,7 @@ public:
 
     gxAudio* audio;
     gxInput* input;
-    gxGraphics* graphics;
+    gxGraphicsD3D9* graphics;
     gxFileSystem* fileSystem;
 
     IDirect3D9Ex* d3d;
@@ -70,8 +70,8 @@ private:
     std::string app_close;
 
     bool setDisplayMode(int w, int h, int d, bool d3d);
-    gxGraphics* openWindowedGraphics(int w, int h, int d, bool d3d);
-    gxGraphics* openExclusiveGraphics(int w, int h, int d, bool d3d);
+    gxGraphicsD3D9* openWindowedGraphics(int w, int h, int d, bool d3d);
+    gxGraphicsD3D9* openExclusiveGraphics(int w, int h, int d, bool d3d);
 
     bool enum_all;
     std::vector<GfxDriver*> drivers;

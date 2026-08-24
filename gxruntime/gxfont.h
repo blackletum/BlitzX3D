@@ -8,33 +8,35 @@
 #include <map>
 #include <unordered_map>
 
-class gxCanvas;
-class gxGraphics;
+#include "../gfx/gfxfont.h"
+
+class gxCanvasD3D9;
+class gxGraphicsD3D9;
 
 // typedef IDirectDrawSurface7 ddSurf;
 
-class gxFont {
+class gxFontD3D9 : public gxFont {
 public:
-	gxFont(FT_Library ftLibrary, gxGraphics* gfx, const std::string& fn, int h, bool bold = false, bool italic = false, bool underlined = false);
-	~gxFont();
+	gxFontD3D9(FT_Library ftLibrary, gxGraphicsD3D9* gfx, const std::string& fn, int h, bool bold = false, bool italic = false, bool underlined = false);
+	~gxFontD3D9();
 
-	void render(gxCanvas* dest, unsigned color_argb, int x, int y, const std::string& t);
+	void render(gxCanvasD3D9* dest, unsigned color_argb, int x, int y, const std::string& t);
 
-	int charWidth(int c);
-	int charAdvance(int c);
-	int stringWidth(const std::string& text);
-	void setSmooth(bool enable) { smooth = enable; }
+	int charWidth(int c) override;
+	int charAdvance(int c) override;
+	int stringWidth(const std::string& text) override;
+	void setSmooth(bool enable) override { smooth = enable; }
 
 	//ACCESSORS
-	int getWidth()const;							//width of widest char
-	int getHeight()const;							//height of font
-	int getRenderOffset()const;
-	int getWidth(const std::string& text);	    //width of string
-	bool isPrintable(int chr)const;				//printable char?
+	int getWidth()const override;							//width of widest char
+	int getHeight()const override;							//height of font
+	int getRenderOffset()const override;
+	int getWidth(const std::string& text) override;	    //width of string
+	bool isPrintable(int chr)const override;				//printable char?
 
-	std::vector<gxCanvas*> atlases;
+	std::vector<gxCanvasD3D9*> atlases;
 
-	gxCanvas* tempCanvas;
+	gxCanvasD3D9* tempCanvas;
 
 	enum {
 		FONT_BOLD = 1,
@@ -71,7 +73,7 @@ private:
 	int height;
 	FT_Face freeTypeFace;
 	std::unordered_map<int, GlyphData> glyphData;
-	gxGraphics* graphics;
+	gxGraphicsD3D9* graphics;
 	std::string filename;
 };
 

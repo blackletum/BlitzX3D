@@ -6,27 +6,27 @@
 
 extern gxRuntime* gx_runtime;
 
-gxMesh::gxMesh(gxGraphics* g, IDirect3DVertexBuffer9* vs, IDirect3DIndexBuffer9* is,
+gxMeshD3D9::gxMeshD3D9(gxGraphicsD3D9* g, IDirect3DVertexBuffer9* vs, IDirect3DIndexBuffer9* is,
     int max_vs, int max_ts) :
     graphics(g), vertex_buff(vs), index_buff(is), vertex_decl(nullptr),
     locked_verts(nullptr), locked_skin_verts(nullptr), locked_indices(nullptr),
     max_verts(max_vs), max_tris(max_ts), mesh_dirty(false), skinned(false) {
 }
 
-gxMesh::gxMesh(gxGraphics* g, IDirect3DVertexBuffer9* vs, IDirect3DIndexBuffer9* is,
+gxMeshD3D9::gxMeshD3D9(gxGraphicsD3D9* g, IDirect3DVertexBuffer9* vs, IDirect3DIndexBuffer9* is,
     IDirect3DVertexDeclaration9* decl, int max_vs, int max_ts) :
     graphics(g), vertex_buff(vs), index_buff(is), vertex_decl(decl),
     locked_verts(nullptr), locked_skin_verts(nullptr), locked_indices(nullptr),
     max_verts(max_vs), max_tris(max_ts), mesh_dirty(false), skinned(true) {
 }
 
-gxMesh::~gxMesh() {
+gxMeshD3D9::~gxMeshD3D9() {
     unlock();
     if (vertex_buff) { vertex_buff->Release(); vertex_buff = nullptr; }
     if (index_buff) { index_buff->Release();  index_buff = nullptr; }
 }
 
-bool gxMesh::lock(bool all) {
+bool gxMeshD3D9::lock(bool all) {
     if ((locked_verts || locked_skin_verts) && locked_indices) return true;
 
     // lock vert buffer
@@ -65,7 +65,7 @@ bool gxMesh::lock(bool all) {
     return true;
 }
 
-void gxMesh::unlock() {
+void gxMeshD3D9::unlock() {
     if (locked_verts) {
         vertex_buff->Unlock();
         locked_verts = nullptr;
@@ -80,15 +80,15 @@ void gxMesh::unlock() {
     }
 }
 
-void gxMesh::backup() {
+void gxMeshD3D9::backup() {
 	unlock();
 }
 
-void gxMesh::restore() {
+void gxMeshD3D9::restore() {
 	mesh_dirty = true;
 }
 
-void gxMesh::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+void gxMeshD3D9::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
     unlock();
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
@@ -107,7 +107,7 @@ void gxMesh::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
     dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
 }
 
-void gxMesh::renderSkinned(int first_vert, int vert_cnt, int first_tri, int tri_cnt,
+void gxMeshD3D9::renderSkinned(int first_vert, int vert_cnt, int first_tri, int tri_cnt,
     const float* bone_data, int bone_cnt) {
     unlock();
 

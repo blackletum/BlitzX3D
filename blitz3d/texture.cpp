@@ -3,7 +3,7 @@
 #include "texture.h"
 #include "cachedtexture.h"
 
-#include "../gxruntime/gxgraphics.h"
+#include "../gfx/gfx.h"
 
 extern gxScene* gx_scene;
 extern gxGraphics* gx_graphics;
