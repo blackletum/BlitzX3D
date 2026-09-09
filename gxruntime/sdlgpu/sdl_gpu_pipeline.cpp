@@ -20,7 +20,7 @@ namespace sdlgpu {
 
 	static void TeardownBlit();
 
-	static SDL_GPUShader* LoadShader(SDL_GPUDevice* dev, SDL_GPUShaderFormat fmt, SDL_GPUShaderStage stage, const char* entry, const uint8_t* code, size_t size, unsigned samplers = 0) {
+	static SDL_GPUShader* LoadShader(SDL_GPUDevice* dev, SDL_GPUShaderFormat fmt, SDL_GPUShaderStage stage, const char* entry, const uint8_t* code, size_t size, unsigned samplers = 0, unsigned uniformBuffers = 0) {
 		SDL_GPUShaderCreateInfo info{};
 		info.code = code;
 		info.code_size = size;
@@ -28,6 +28,7 @@ namespace sdlgpu {
 		info.format = fmt;
 		info.stage = stage;
 		info.num_samplers = samplers;
+		info.num_uniform_buffers = uniformBuffers;
 		return SDL_CreateGPUShader(dev, &info);
 	}
 
@@ -55,6 +56,7 @@ namespace sdlgpu {
 		texInfo.height = h;
 		texInfo.layer_count_or_depth = 1;
 		texInfo.num_levels = 1;
+		texInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
 		g_blitTex = SDL_CreateGPUTexture(dev, &texInfo);
 		if (!g_blitTex) return false;
 		g_blitDev = dev;
@@ -196,6 +198,7 @@ namespace sdlgpu {
 		info.height = 1;
 		info.layer_count_or_depth = 1;
 		info.num_levels = 1;
+		info.sample_count = SDL_GPU_SAMPLECOUNT_1;
 		SDL_GPUTexture* tex = SDL_CreateGPUTexture(dev, &info);
 		if (!tex) return nullptr;
 
@@ -256,9 +259,9 @@ namespace sdlgpu {
 		}
 		if (useFmt == SDL_GPU_SHADERFORMAT_INVALID) return false;
 
-		SDL_GPUShader* vs = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_VERTEX, "VSMain", vsCode, vsSize, 0);
+		SDL_GPUShader* vs = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_VERTEX, "VSMain", vsCode, vsSize, 0, 1);
 		if (!vs) return false;
-		SDL_GPUShader* ps = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_FRAGMENT, "PSMain", psCode, psSize, 1);
+		SDL_GPUShader* ps = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_FRAGMENT, "PSMain", psCode, psSize, 1, 0);
 		if (!ps) { SDL_ReleaseGPUShader(dev, vs); return false; }
 
 		SDL_GPUVertexBufferDescription vb{};
@@ -318,8 +321,8 @@ namespace sdlgpu {
 		return true;
 	}
 
-	void DrawMesh(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPUCommandBuffer* cmds, SDL_GPURenderPass* pass, GpuMesh* mesh, const float* viewProj, SDL_GPUTexture* tex, unsigned indexCount, unsigned startIndex, int firstVertex, int colorFormat, int depthFormat) {
-		if (!dev || !cmds || !pass || !mesh || !viewProj || !indexCount) return;
+	void DrawMesh(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPUCommandBuffer* cmds, SDL_GPURenderPass* pass, GpuMesh* mesh, const float* uniforms, unsigned uniformBytes, SDL_GPUTexture* tex, unsigned indexCount, unsigned startIndex, int firstVertex, int colorFormat, int depthFormat) {
+		if (!dev || !cmds || !pass || !mesh || !uniforms || !uniformBytes || !indexCount) return;
 		if (!colorFormat && !win) return;
 		if (!EnsureMeshPipe(dev, win, mesh->vertStride, colorFormat, depthFormat)) return;
 
@@ -329,7 +332,7 @@ namespace sdlgpu {
 			if (!boundTex) return;
 		}
 
-		SDL_PushGPUVertexUniformData(cmds, 0, viewProj, 64);
+		SDL_PushGPUVertexUniformData(cmds, 0, uniforms, uniformBytes);
 		SDL_BindGPUGraphicsPipeline(pass, g_meshPipe);
 		SDL_GPUBufferBinding vb{};
 		vb.buffer = mesh->verts;

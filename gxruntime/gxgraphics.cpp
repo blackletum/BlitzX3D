@@ -558,6 +558,16 @@ void gxGraphics::freeScene(gxScene* scene) {
 	delete scene;
 }
 
+bool gxGraphics::presentSceneSDL(struct SDL_GPUDevice* dev, struct SDL_Window* win) {
+	if (!dev || !win) return false;
+	for (gxScene* scene : scene_set) {
+		if (scene && scene->hasGpuImage()) {
+			if (scene->presentGpuFrame(dev, win)) return true;
+		}
+	}
+	return false;
+}
+
 void gxGraphics::adoptCanvas(gxCanvas* c) {
 	canvas_set.insert(c);
 }

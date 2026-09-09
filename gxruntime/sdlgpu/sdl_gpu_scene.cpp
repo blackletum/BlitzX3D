@@ -60,16 +60,20 @@ bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsig
 		frame.cmds = nullptr;
 		return false;
 	}
+	SDL_GPUViewport vp{};
+	vp.x = 0; vp.y = 0; vp.w = (float)w; vp.h = (float)h;
+	vp.min_depth = 0.0f; vp.max_depth = 1.0f;
+	SDL_SetGPUViewport(frame.pass, &vp);
 	return true;
 }
 
-void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const float* viewProjTransposed, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
 	(void)vert_cnt;
-	if (!frame.active() || !mesh || !viewProjTransposed || tri_cnt <= 0) return;
+	if (!frame.active() || !mesh || tri_cnt <= 0) return;
 
 	unsigned indexCount = (unsigned)tri_cnt * 3;
 	unsigned startIndex = (unsigned)first_tri * 3;
-	DrawMesh(frame.dev, nullptr, frame.cmds, frame.pass, mesh, viewProjTransposed, tex, indexCount, startIndex, first_vert, SceneColorFormat(), MeshDepthFormat(frame.dev));
+	DrawMesh(frame.dev, nullptr, frame.cmds, frame.pass, mesh, (const float*)&uniforms, (unsigned)sizeof(uniforms), tex, indexCount, startIndex, first_vert, SceneColorFormat(), MeshDepthFormat(frame.dev));
 }
 
 void EndSceneFrame(GpuSceneFrame& frame) {
@@ -81,6 +85,40 @@ void EndSceneFrame(GpuSceneFrame& frame) {
 		SDL_SubmitGPUCommandBuffer(frame.cmds);
 		frame.cmds = nullptr;
 	}
+}
+
+bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame) {
+	if (!dev || !win || !frame.colorTarget || !frame.width || !frame.height) return false;
+	if (frame.pass || frame.cmds) return false;
+
+	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
+	if (!cmds) return false;
+
+	SDL_GPUTexture* swap = nullptr;
+	Uint32 sw = 0, sh = 0;
+	if (!SDL_AcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
+		SDL_CancelGPUCommandBuffer(cmds);
+		return false;
+	}
+	if (!swap) {
+		SDL_SubmitGPUCommandBuffer(cmds);
+		return true;
+	}
+
+	SDL_GPUBlitInfo blit{};
+	blit.source.texture = frame.colorTarget;
+	blit.source.w = frame.width;
+	blit.source.h = frame.height;
+	blit.destination.texture = swap;
+	blit.destination.w = sw;
+	blit.destination.h = sh;
+	blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+	blit.flip_mode = SDL_FLIP_NONE;
+	blit.filter = SDL_GPU_FILTER_LINEAR;
+	blit.cycle = false;
+	SDL_BlitGPUTexture(cmds, &blit);
+
+	return SDL_SubmitGPUCommandBuffer(cmds);
 }
 
 }

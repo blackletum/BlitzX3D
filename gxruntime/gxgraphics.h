@@ -129,6 +129,7 @@ public:
 	gxScene* createScene(int flags);
 	gxScene* verifyScene(gxScene* scene);
 	void freeScene(gxScene* scene);
+	bool presentSceneSDL(struct SDL_GPUDevice* dev, struct SDL_Window* win);
 
 	void adoptCanvas(gxCanvas* c);
 

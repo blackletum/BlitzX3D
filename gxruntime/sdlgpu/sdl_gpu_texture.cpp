@@ -18,6 +18,7 @@ SDL_GPUTexture* CreateTexture2D(SDL_GPUDevice* dev, unsigned w, unsigned h) {
 	info.height = h;
 	info.layer_count_or_depth = 1;
 	info.num_levels = 1;
+	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
 	return SDL_CreateGPUTexture(dev, &info);
 }
 
@@ -73,6 +74,7 @@ SDL_GPUTexture* CreateColorTarget(SDL_GPUDevice* dev, unsigned w, unsigned h) {
 	info.height = h;
 	info.layer_count_or_depth = 1;
 	info.num_levels = 1;
+	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
 	return SDL_CreateGPUTexture(dev, &info);
 }
 
@@ -86,6 +88,7 @@ SDL_GPUTexture* CreateDepthTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, in
 	info.height = h;
 	info.layer_count_or_depth = 1;
 	info.num_levels = 1;
+	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
 	return SDL_CreateGPUTexture(dev, &info);
 }
 

@@ -834,9 +834,9 @@ void gxScene::clear(const float rgb[3], float alpha, float z, bool clear_argb, b
 
 void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
 	if (gpuFrame.active() && mesh && !mesh->isSkinned() && mesh->getGpuMirror()) {
-		float mvp[16];
-		computeGpuMVP(mvp);
-		sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), mvp, nullptr, first_vert, vert_cnt, first_tri, tri_cnt);
+		sdlgpu::MeshUniforms uniforms;
+		computeGpuMeshUniforms(uniforms);
+		sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), uniforms, nullptr, first_vert, vert_cnt, first_tri, tri_cnt);
 	}
 
 	if (currentEffect) {
@@ -900,8 +900,49 @@ void gxScene::computeGpuMVP(float out[16]) const {
 	D3DXMATRIX mvp;
 	D3DXMatrixMultiply(&mvp, &currentWorld, &currentView);
 	D3DXMatrixMultiply(&mvp, &mvp, &currentProj);
-	D3DXMatrixTranspose(&mvp, &mvp);
 	memcpy(out, &mvp, 64);
+}
+
+void gxScene::computeGpuWorld(float out[16]) const {
+	memcpy(out, &currentWorld, 64);
+}
+
+void gxScene::computeGpuMeshUniforms(sdlgpu::MeshUniforms& u) const {
+	computeGpuMVP(u.mvp);
+	computeGpuWorld(u.world);
+
+	unsigned amb = (fx & FX_FULLBRIGHT) ? 0xffffff : ((fx & FX_CONDLIGHT) ? ambient2 : ambient);
+	u.ambient[0] = ((amb >> 16) & 0xff) / 255.0f;
+	u.ambient[1] = ((amb >> 8) & 0xff) / 255.0f;
+	u.ambient[2] = (amb & 0xff) / 255.0f;
+	u.ambient[3] = 0.0f;
+
+	u.lightColor[0] = u.lightColor[1] = u.lightColor[2] = 0.0f;
+	u.lightColor[3] = 0.0f;
+	u.lightPosDir[0] = 0.0f; u.lightPosDir[1] = 0.0f; u.lightPosDir[2] = -1.0f;
+	u.lightPosDir[3] = 0.0f;
+	if (!(fx & FX_FULLBRIGHT)) {
+		for (gxLight* light : _curLights) {
+			if (!light) continue;
+			const D3DLIGHT9& L = light->d3d_light;
+			if ((fx & FX_CONDLIGHT) && L.Type == D3DLIGHT_DIRECTIONAL) continue;
+			if (L.Type == D3DLIGHT_DIRECTIONAL) {
+				float dx = -L.Direction.x, dy = -L.Direction.y, dz = -L.Direction.z;
+				float len = sqrtf(dx * dx + dy * dy + dz * dz);
+				if (len > 1e-6f) { dx /= len; dy /= len; dz /= len; }
+				else { dx = 0.0f; dy = 0.0f; dz = -1.0f; }
+				u.lightPosDir[0] = dx; u.lightPosDir[1] = dy; u.lightPosDir[2] = dz;
+				u.lightPosDir[3] = 0.0f;
+			}
+			else {
+				u.lightPosDir[0] = L.Position.x; u.lightPosDir[1] = L.Position.y; u.lightPosDir[2] = L.Position.z;
+				u.lightPosDir[3] = 1.0f;
+			}
+			u.lightColor[0] = L.Diffuse.r; u.lightColor[1] = L.Diffuse.g; u.lightColor[2] = L.Diffuse.b;
+			u.lightColor[3] = 1.0f;
+			break;
+		}
+	}
 }
 
 void gxScene::setSkinShaderConstants() {
@@ -985,6 +1026,15 @@ void gxScene::end() {
 	RECT r = { (LONG)viewport.X, (LONG)viewport.Y, (LONG)(viewport.X + viewport.Width), (LONG)(viewport.Y + viewport.Height) };
 	target->damage(r);
 	sdlgpu::EndSceneFrame(gpuFrame);
+}
+
+bool gxScene::hasGpuImage() const {
+	return gpuFrame.colorTarget != nullptr && gpuFrame.width != 0 && gpuFrame.height != 0;
+}
+
+bool gxScene::presentGpuFrame(struct SDL_GPUDevice* dev, struct SDL_Window* win) {
+	if (!hasGpuImage()) return false;
+	return sdlgpu::PresentSceneFrame((SDL_GPUDevice*)dev, (SDL_Window*)win, gpuFrame);
 }
 
 gxLight* gxScene::createLight(int flags) {

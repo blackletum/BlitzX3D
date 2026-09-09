@@ -119,6 +119,8 @@ public:
 	void render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt);
 	void renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt);
 	void end();
+	bool hasGpuImage() const;
+	bool presentGpuFrame(struct SDL_GPUDevice* dev, struct SDL_Window* win);
 
 	//lighting
 	gxLight* createLight(int flags);
@@ -195,6 +197,8 @@ private:
 	void setEffectInternal(gxEffect* e);
 	void setSkinShaderConstants();
 	void computeGpuMVP(float out[16]) const;
+	void computeGpuWorld(float out[16]) const;
+	void computeGpuMeshUniforms(sdlgpu::MeshUniforms& u) const;
 };
 
 #endif
