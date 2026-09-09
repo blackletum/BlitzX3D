@@ -7,18 +7,15 @@
 
 #include <SDL3/SDL_gpu.h>
 
-#include "shaders/blit_shaders.h"
 #include "shaders/mesh_shaders.h"
 
 namespace sdlgpu {
 
 	namespace {
 		SDL_GPUDevice* g_blitDev = nullptr;
-		SDL_GPUTextureFormat g_blitFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
-		SDL_GPUGraphicsPipeline* g_blitPipe = nullptr;
-		SDL_GPUSampler* g_blitSamp = nullptr;
 		SDL_GPUTexture* g_blitTex = nullptr;
 		unsigned g_blitW = 0, g_blitH = 0;
+		bool g_blitHasData = false;
 	}
 
 	static void TeardownBlit();
@@ -35,94 +32,41 @@ namespace sdlgpu {
 	}
 
 	static void TeardownBlit() {
-		if (g_blitPipe && g_blitDev) SDL_ReleaseGPUGraphicsPipeline(g_blitDev, g_blitPipe);
-		if (g_blitSamp && g_blitDev) SDL_ReleaseGPUSampler(g_blitDev, g_blitSamp);
 		if (g_blitTex && g_blitDev) SDL_ReleaseGPUTexture(g_blitDev, g_blitTex);
-		g_blitPipe = nullptr;
-		g_blitSamp = nullptr;
 		g_blitTex = nullptr;
 		g_blitDev = nullptr;
-		g_blitFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
 		g_blitW = g_blitH = 0;
+		g_blitHasData = false;
 	}
 
-	static bool EnsureBlit(SDL_GPUDevice* dev, SDL_Window* win, unsigned w, unsigned h) {
-		SDL_GPUTextureFormat fmt = SDL_GetGPUSwapchainTextureFormat(dev, win);
-		if (g_blitPipe && g_blitDev == dev && g_blitFormat == fmt && g_blitTex && g_blitW == w && g_blitH == h) return true;
-		if (!g_blitPipe || g_blitDev != dev || g_blitFormat != fmt) {
-			TeardownBlit();
-			SDL_GPUShaderFormat supported = SDL_GetGPUShaderFormats(dev);
-			const uint8_t* vsCode = nullptr;
-			const uint8_t* psCode = nullptr;
-			size_t vsSize = 0, psSize = 0;
-			SDL_GPUShaderFormat useFmt = SDL_GPU_SHADERFORMAT_INVALID;
-			if (supported & SDL_GPU_SHADERFORMAT_SPIRV) {
-				useFmt = SDL_GPU_SHADERFORMAT_SPIRV;
-				vsCode = kBlitVS_SPIRV; vsSize = kBlitVS_SPIRV_size;
-				psCode = kBlitPS_SPIRV; psSize = kBlitPS_SPIRV_size;
-			}
-			else if (supported & SDL_GPU_SHADERFORMAT_DXIL) {
-				useFmt = SDL_GPU_SHADERFORMAT_DXIL;
-				vsCode = kBlitVS_DXIL; vsSize = kBlitVS_DXIL_size;
-				psCode = kBlitPS_DXIL; psSize = kBlitPS_DXIL_size;
-			}
-			if (useFmt == SDL_GPU_SHADERFORMAT_INVALID) return false;
-
-			SDL_GPUShader* vs = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_VERTEX, "VSMain", vsCode, vsSize);
-			if (!vs) return false;
-			SDL_GPUShader* ps = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_FRAGMENT, "PSMain", psCode, psSize, 1);
-			if (!ps) { SDL_ReleaseGPUShader(dev, vs); return false; }
-
-			SDL_GPUColorTargetDescription target{};
-			target.format = fmt;
-
-			SDL_GPUGraphicsPipelineCreateInfo info{};
-			info.vertex_shader = vs;
-			info.fragment_shader = ps;
-			info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-			info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-			info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
-			info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
-			info.target_info.num_color_targets = 1;
-			info.target_info.color_target_descriptions = &target;
-
-			g_blitPipe = SDL_CreateGPUGraphicsPipeline(dev, &info);
-			SDL_ReleaseGPUShader(dev, vs);
-			SDL_ReleaseGPUShader(dev, ps);
-			if (!g_blitPipe) return false;
-
-			SDL_GPUSamplerCreateInfo samp{};
-			samp.min_filter = SDL_GPU_FILTER_LINEAR;
-			samp.mag_filter = SDL_GPU_FILTER_LINEAR;
-			samp.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-			samp.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-			g_blitSamp = SDL_CreateGPUSampler(dev, &samp);
-			if (!g_blitSamp) { TeardownBlit(); return false; }
-
-			g_blitDev = dev;
-			g_blitFormat = fmt;
+	static bool EnsureBlitTexture(SDL_GPUDevice* dev, unsigned w, unsigned h) {
+		if (g_blitTex && g_blitDev == dev && g_blitW == w && g_blitH == h) return true;
+		if (g_blitTex) {
+			SDL_ReleaseGPUTexture(g_blitDev, g_blitTex);
+			g_blitTex = nullptr;
+			g_blitW = g_blitH = 0;
+			g_blitHasData = false;
 		}
-		if (!g_blitTex || g_blitW != w || g_blitH != h) {
-			if (g_blitTex) SDL_ReleaseGPUTexture(g_blitDev, g_blitTex);
-			SDL_GPUTextureCreateInfo texInfo{};
-			texInfo.type = SDL_GPU_TEXTURETYPE_2D;
-			texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-			texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-			texInfo.width = w;
-			texInfo.height = h;
-			texInfo.layer_count_or_depth = 1;
-			texInfo.num_levels = 1;
-			g_blitTex = SDL_CreateGPUTexture(dev, &texInfo);
-			if (!g_blitTex) return false;
-			g_blitW = w;
-			g_blitH = h;
-		}
+		SDL_GPUTextureCreateInfo texInfo{};
+		texInfo.type = SDL_GPU_TEXTURETYPE_2D;
+		texInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+		texInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		texInfo.width = w;
+		texInfo.height = h;
+		texInfo.layer_count_or_depth = 1;
+		texInfo.num_levels = 1;
+		g_blitTex = SDL_CreateGPUTexture(dev, &texInfo);
+		if (!g_blitTex) return false;
+		g_blitDev = dev;
+		g_blitW = w;
+		g_blitH = h;
+		g_blitHasData = false;
 		return true;
 	}
 
 	bool PresentBlit(SDL_GPUDevice* dev, SDL_Window* win, float r, float g, float b, unsigned w, unsigned h, const void* px) {
 		if (!dev || !win || !w || !h) return false;
-		if (!EnsureBlit(dev, win, w, h)) return false;
+		if (!EnsureBlitTexture(dev, w, h)) return false;
 
 		SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
 		if (!cmds) return false;
@@ -156,6 +100,7 @@ namespace sdlgpu {
 			reg.d = 1;
 			SDL_UploadToGPUTexture(copy, &src, &reg, false);
 			SDL_EndGPUCopyPass(copy);
+			g_blitHasData = true;
 		}
 
 		SDL_GPUTexture* tex = nullptr;
@@ -166,19 +111,30 @@ namespace sdlgpu {
 			return false;
 		}
 		if (tex) {
-			SDL_GPUColorTargetInfo target{};
-			target.texture = tex;
-			target.load_op = SDL_GPU_LOADOP_CLEAR;
-			target.store_op = SDL_GPU_STOREOP_STORE;
-			target.clear_color = SDL_FColor{ r, g, b, 1.0f };
-			SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &target, 1, nullptr);
-			SDL_BindGPUGraphicsPipeline(pass, g_blitPipe);
-			SDL_GPUTextureSamplerBinding bind{};
-			bind.texture = g_blitTex;
-			bind.sampler = g_blitSamp;
-			SDL_BindGPUFragmentSamplers(pass, 0, &bind, 1);
-			SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
-			SDL_EndGPURenderPass(pass);
+			if (g_blitHasData) {
+				SDL_GPUBlitInfo blit{};
+				blit.source.texture = g_blitTex;
+				blit.source.w = w;
+				blit.source.h = h;
+				blit.destination.texture = tex;
+				blit.destination.w = sw;
+				blit.destination.h = sh;
+				blit.load_op = SDL_GPU_LOADOP_CLEAR;
+				blit.clear_color = SDL_FColor{ r, g, b, 1.0f };
+				blit.flip_mode = SDL_FLIP_NONE;
+				blit.filter = SDL_GPU_FILTER_LINEAR;
+				blit.cycle = false;
+				SDL_BlitGPUTexture(cmds, &blit);
+			}
+			else {
+				SDL_GPUColorTargetInfo target{};
+				target.texture = tex;
+				target.load_op = SDL_GPU_LOADOP_CLEAR;
+				target.store_op = SDL_GPU_STOREOP_STORE;
+				target.clear_color = SDL_FColor{ r, g, b, 1.0f };
+				SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &target, 1, nullptr);
+				SDL_EndGPURenderPass(pass);
+			}
 		}
 		bool ok = SDL_SubmitGPUCommandBuffer(cmds);
 		if (buf) SDL_ReleaseGPUTransferBuffer(dev, buf);
