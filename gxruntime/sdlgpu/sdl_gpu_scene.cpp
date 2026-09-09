@@ -67,13 +67,13 @@ bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsig
 	return true;
 }
 
-void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt, bool alphaBlend, SDL_GPUCullMode cullMode) {
 	(void)vert_cnt;
 	if (!frame.active() || !mesh || tri_cnt <= 0) return;
 
 	unsigned indexCount = (unsigned)tri_cnt * 3;
 	unsigned startIndex = (unsigned)first_tri * 3;
-	DrawMesh(frame.dev, nullptr, frame.cmds, frame.pass, mesh, (const float*)&uniforms, (unsigned)sizeof(uniforms), tex, indexCount, startIndex, first_vert, SceneColorFormat(), MeshDepthFormat(frame.dev));
+	DrawMesh(frame.dev, nullptr, frame.cmds, frame.pass, mesh, (const float*)&uniforms, (unsigned)sizeof(uniforms), tex, indexCount, startIndex, first_vert, SceneColorFormat(), MeshDepthFormat(frame.dev), alphaBlend, cullMode);
 }
 
 void EndSceneFrame(GpuSceneFrame& frame) {

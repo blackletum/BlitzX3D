@@ -150,6 +150,8 @@ namespace sdlgpu {
 		SDL_GPUGraphicsPipeline* g_meshPipe = nullptr;
 		SDL_GPUSampler* g_meshSamp = nullptr;
 		unsigned g_meshStride = 0;
+		bool g_meshAlpha = false;
+		SDL_GPUCullMode g_meshCull = SDL_GPU_CULLMODE_NONE;
 		SDL_GPUDevice* g_whiteDev = nullptr;
 		SDL_GPUTexture* g_whiteTex = nullptr;
 	}
@@ -163,6 +165,8 @@ namespace sdlgpu {
 		g_meshFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
 		g_meshDepthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
 		g_meshStride = 0;
+		g_meshAlpha = false;
+		g_meshCull = SDL_GPU_CULLMODE_NONE;
 	}
 
 	static void TeardownWhiteTexture() {
@@ -236,10 +240,10 @@ namespace sdlgpu {
 		return g_whiteTex;
 	}
 
-	static bool EnsureMeshPipe(SDL_GPUDevice* dev, SDL_Window* win, unsigned stride, int colorFormatOverride, int depthFormatOverride) {
+	static bool EnsureMeshPipe(SDL_GPUDevice* dev, SDL_Window* win, unsigned stride, int colorFormatOverride, int depthFormatOverride, bool alphaBlend, SDL_GPUCullMode cullMode) {
 		SDL_GPUTextureFormat fmt = colorFormatOverride ? (SDL_GPUTextureFormat)colorFormatOverride : SDL_GetGPUSwapchainTextureFormat(dev, win);
 		SDL_GPUTextureFormat depthFmt = depthFormatOverride ? (SDL_GPUTextureFormat)depthFormatOverride : PickMeshDepthFormat(dev);
-		if (g_meshPipe && g_meshDev == dev && g_meshFormat == fmt && g_meshDepthFormat == depthFmt && g_meshStride == stride) return true;
+		if (g_meshPipe && g_meshDev == dev && g_meshFormat == fmt && g_meshDepthFormat == depthFmt && g_meshStride == stride && g_meshAlpha == alphaBlend && g_meshCull == cullMode) return true;
 		TeardownMeshPipe();
 
 		SDL_GPUShaderFormat supported = SDL_GetGPUShaderFormats(dev);
@@ -281,6 +285,15 @@ namespace sdlgpu {
 
 		SDL_GPUColorTargetDescription target{};
 		target.format = fmt;
+		if (alphaBlend) {
+			target.blend_state.enable_blend = true;
+			target.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+			target.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+			target.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+			target.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+			target.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+			target.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+		}
 
 		SDL_GPUGraphicsPipelineCreateInfo info{};
 		info.vertex_shader = vs;
@@ -288,7 +301,7 @@ namespace sdlgpu {
 		info.vertex_input_state = vin;
 		info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 		info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-		info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+		info.rasterizer_state.cull_mode = cullMode;
 		info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
 
 		info.depth_stencil_state.enable_depth_test = true;
@@ -318,13 +331,15 @@ namespace sdlgpu {
 		g_meshFormat = fmt;
 		g_meshDepthFormat = depthFmt;
 		g_meshStride = stride;
+		g_meshAlpha = alphaBlend;
+		g_meshCull = cullMode;
 		return true;
 	}
 
-	void DrawMesh(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPUCommandBuffer* cmds, SDL_GPURenderPass* pass, GpuMesh* mesh, const float* uniforms, unsigned uniformBytes, SDL_GPUTexture* tex, unsigned indexCount, unsigned startIndex, int firstVertex, int colorFormat, int depthFormat) {
+	void DrawMesh(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPUCommandBuffer* cmds, SDL_GPURenderPass* pass, GpuMesh* mesh, const float* uniforms, unsigned uniformBytes, SDL_GPUTexture* tex, unsigned indexCount, unsigned startIndex, int firstVertex, int colorFormat, int depthFormat, bool alphaBlend, SDL_GPUCullMode cullMode) {
 		if (!dev || !cmds || !pass || !mesh || !uniforms || !uniformBytes || !indexCount) return;
 		if (!colorFormat && !win) return;
-		if (!EnsureMeshPipe(dev, win, mesh->vertStride, colorFormat, depthFormat)) return;
+		if (!EnsureMeshPipe(dev, win, mesh->vertStride, colorFormat, depthFormat, alphaBlend, cullMode)) return;
 
 		SDL_GPUTexture* boundTex = tex;
 		if (!boundTex) {

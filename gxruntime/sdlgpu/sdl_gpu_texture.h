@@ -4,6 +4,8 @@
 struct SDL_GPUDevice;
 struct SDL_GPUTexture;
 
+class gxCanvas;
+
 namespace sdlgpu {
 
 	SDL_GPUTexture* CreateTexture2D(SDL_GPUDevice* dev, unsigned w, unsigned h);
@@ -12,6 +14,8 @@ namespace sdlgpu {
 
 	SDL_GPUTexture* CreateColorTarget(SDL_GPUDevice* dev, unsigned w, unsigned h);
 	SDL_GPUTexture* CreateDepthTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, int formatValue);
+
+	SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, gxCanvas* canvas);
 
 }
 

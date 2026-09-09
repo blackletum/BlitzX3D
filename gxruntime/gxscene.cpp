@@ -4,6 +4,7 @@
 #include "gxruntime.h"
 #include "gxeffect.h"
 #include "gxmesh.h"
+#include "sdlgpu/sdl_gpu_texture.h"
 
 static bool can_wb;
 static int  hw_tex_stages, tex_stages;
@@ -836,7 +837,14 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 	if (gpuFrame.active() && mesh && !mesh->isSkinned() && mesh->getGpuMirror()) {
 		sdlgpu::MeshUniforms uniforms;
 		computeGpuMeshUniforms(uniforms);
-		sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), uniforms, nullptr, first_vert, vert_cnt, first_tri, tri_cnt);
+		SDL_GPUDevice* dev = gpuFrame.dev ? gpuFrame.dev : (graphics && graphics->runtime ? (SDL_GPUDevice*)graphics->runtime->sdlGpu : nullptr);
+		SDL_GPUTexture* tex = nullptr;
+		if (n_texs > 0 && texstate[0].canvas) tex = sdlgpu::GetCanvasTexture(dev, texstate[0].canvas);
+		bool alphaBlend = (blend != BLEND_REPLACE);
+		SDL_GPUCullMode cull = SDL_GPU_CULLMODE_BACK;
+		if (fx & FX_DOUBLESIDED) cull = SDL_GPU_CULLMODE_NONE;
+		else if (flipped) cull = SDL_GPU_CULLMODE_FRONT;
+		sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), uniforms, tex, first_vert, vert_cnt, first_tri, tri_cnt, alphaBlend, cull);
 	}
 
 	if (currentEffect) {
