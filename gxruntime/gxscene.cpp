@@ -5,6 +5,8 @@
 #include "gxeffect.h"
 #include "gxmesh.h"
 #include "sdlgpu/sdl_gpu_texture.h"
+#include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_video.h>
 
 static bool can_wb;
 static int  hw_tex_stages, tex_stages;
@@ -835,16 +837,28 @@ void gxScene::clear(const float rgb[3], float alpha, float z, bool clear_argb, b
 
 void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
 	if (gpuFrame.active() && mesh && !mesh->isSkinned() && mesh->getGpuMirror()) {
-		sdlgpu::MeshUniforms uniforms;
-		computeGpuMeshUniforms(uniforms);
-		SDL_GPUDevice* dev = gpuFrame.dev ? gpuFrame.dev : (graphics && graphics->runtime ? (SDL_GPUDevice*)graphics->runtime->sdlGpu : nullptr);
-		SDL_GPUTexture* tex = nullptr;
-		if (n_texs > 0 && texstate[0].canvas) tex = sdlgpu::GetCanvasTexture(dev, texstate[0].canvas);
-		bool alphaBlend = (blend != BLEND_REPLACE);
-		SDL_GPUCullMode cull = SDL_GPU_CULLMODE_BACK;
-		if (fx & FX_DOUBLESIDED) cull = SDL_GPU_CULLMODE_NONE;
-		else if (flipped) cull = SDL_GPU_CULLMODE_FRONT;
-		sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), uniforms, tex, first_vert, vert_cnt, first_tri, tri_cnt, alphaBlend, cull);
+		bool skipGpu = false;
+		if (graphics && graphics->runtime && graphics->runtime->sdlWindow) {
+			SDL_Window* sdlWin = graphics->runtime->sdlWindow;
+			SDL_WindowFlags wf = SDL_GetWindowFlags(sdlWin);
+			if (wf & SDL_WINDOW_MINIMIZED) skipGpu = true;
+			if (wf & SDL_WINDOW_HIDDEN) skipGpu = true;
+		}
+		if (gpuFrame.dev && SDL_GetGPUShaderFormats(gpuFrame.dev) == SDL_GPU_SHADERFORMAT_INVALID) skipGpu = true;
+		if (!skipGpu) {
+			sdlgpu::MeshUniforms uniforms;
+			computeGpuMeshUniforms(uniforms);
+			SDL_GPUDevice* dev = gpuFrame.dev ? gpuFrame.dev : (graphics && graphics->runtime ? (SDL_GPUDevice*)graphics->runtime->sdlGpu : nullptr);
+			if (dev && SDL_GetGPUShaderFormats(dev) != SDL_GPU_SHADERFORMAT_INVALID) {
+				SDL_GPUTexture* tex = nullptr;
+				if (n_texs > 0 && texstate[0].canvas) tex = sdlgpu::GetCanvasTexture(dev, texstate[0].canvas);
+				bool alphaBlend = (blend != BLEND_REPLACE);
+				SDL_GPUCullMode cull = SDL_GPU_CULLMODE_BACK;
+				if (fx & FX_DOUBLESIDED) cull = SDL_GPU_CULLMODE_NONE;
+				else if (flipped) cull = SDL_GPU_CULLMODE_FRONT;
+				sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), uniforms, tex, first_vert, vert_cnt, first_tri, tri_cnt, alphaBlend, cull);
+			}
+		}
 	}
 
 	if (currentEffect) {
@@ -1043,6 +1057,10 @@ bool gxScene::hasGpuImage() const {
 bool gxScene::presentGpuFrame(struct SDL_GPUDevice* dev, struct SDL_Window* win) {
 	if (!hasGpuImage()) return false;
 	return sdlgpu::PresentSceneFrame((SDL_GPUDevice*)dev, (SDL_Window*)win, gpuFrame);
+}
+
+bool gxScene::presentGpuFrameWithCanvas(struct SDL_GPUDevice* dev, struct SDL_Window* win, gxCanvas* canvas) {
+	return sdlgpu::PresentSceneWithCanvas((SDL_GPUDevice*)dev, (SDL_Window*)win, gpuFrame, canvas);
 }
 
 gxLight* gxScene::createLight(int flags) {

@@ -8,6 +8,7 @@ struct SDL_Window;
 struct SDL_GPURenderPass;
 struct SDL_GPUCommandBuffer;
 struct SDL_GPUTexture;
+struct SDL_GPUTransferBuffer;
 
 namespace sdlgpu {
 
@@ -15,8 +16,12 @@ struct GpuMesh;
 
 	bool PresentBlit(SDL_GPUDevice* dev, SDL_Window* win, float r, float g, float b, unsigned w, unsigned h, const void* px);
 	void DrawMesh(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPUCommandBuffer* cmds, SDL_GPURenderPass* pass, GpuMesh* mesh, const float* uniforms, unsigned uniformBytes, SDL_GPUTexture* tex, unsigned indexCount, unsigned startIndex, int firstVertex, int colorFormat, int depthFormat, bool alphaBlend, SDL_GPUCullMode cullMode);
+	void DrawCanvasOverlay(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPURenderPass* pass, SDL_GPUTexture* tex);
 	int MeshDepthFormat(SDL_GPUDevice* dev);
 	int SceneColorFormat();
+	SDL_GPUTransferBuffer* AcquireUploadTransferBuffer(SDL_GPUDevice* dev, Uint32 size);
+	void ReleaseUploadTransferBuffer(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf);
+	void ReleaseUploadTransferBufferWithFence(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf, SDL_GPUFence* fence);
 
 	void TeardownPipelines();
 

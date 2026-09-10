@@ -4,6 +4,9 @@
 #include "sdl_gpu_texture.h"
 
 #include "../std.h"
+#include "../gxcanvas.h"
+
+#include <cstdio>
 
 #include <SDL3/SDL_gpu.h>
 
@@ -67,13 +70,16 @@ bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsig
 	return true;
 }
 
-void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt, bool alphaBlend, SDL_GPUCullMode cullMode) {
-	(void)vert_cnt;
-	if (!frame.active() || !mesh || tri_cnt <= 0) return;
+void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt, bool alphaBlend, int cullMode) {
+	if (!frame.active() || !frame.cmds || !frame.dev || !mesh || tri_cnt <= 0 || vert_cnt <= 0) return;
+	if (first_vert < 0 || first_tri < 0) return;
+	if ((unsigned)first_vert + (unsigned)vert_cnt > mesh->maxVerts) return;
+	if ((unsigned)first_tri + (unsigned)tri_cnt > mesh->maxTris) return;
+	if (SDL_GetGPUShaderFormats(frame.dev) == SDL_GPU_SHADERFORMAT_INVALID) return;
 
 	unsigned indexCount = (unsigned)tri_cnt * 3;
 	unsigned startIndex = (unsigned)first_tri * 3;
-	DrawMesh(frame.dev, nullptr, frame.cmds, frame.pass, mesh, (const float*)&uniforms, (unsigned)sizeof(uniforms), tex, indexCount, startIndex, first_vert, SceneColorFormat(), MeshDepthFormat(frame.dev), alphaBlend, cullMode);
+	DrawMesh(frame.dev, nullptr, frame.cmds, frame.pass, mesh, (const float*)&uniforms, (unsigned)sizeof(uniforms), tex, indexCount, startIndex, first_vert, SceneColorFormat(), MeshDepthFormat(frame.dev), alphaBlend, (SDL_GPUCullMode)cullMode);
 }
 
 void EndSceneFrame(GpuSceneFrame& frame) {
@@ -96,7 +102,7 @@ bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame
 
 	SDL_GPUTexture* swap = nullptr;
 	Uint32 sw = 0, sh = 0;
-	if (!SDL_AcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
+	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
 		SDL_CancelGPUCommandBuffer(cmds);
 		return false;
 	}
@@ -117,6 +123,66 @@ bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame
 	blit.filter = SDL_GPU_FILTER_LINEAR;
 	blit.cycle = false;
 	SDL_BlitGPUTexture(cmds, &blit);
+
+	return SDL_SubmitGPUCommandBuffer(cmds);
+}
+
+bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame, ::gxCanvas* canvas) {
+	if (!dev || !win) return false;
+	bool has3D = frame.colorTarget && frame.width && frame.height && !frame.pass && !frame.cmds;
+	if (!has3D && !canvas) return false;
+	if (has3D && (frame.pass || frame.cmds)) return false;
+
+	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
+	if (!cmds) return false;
+	SDL_GPUTexture* swap = nullptr;
+	Uint32 sw = 0, sh = 0;
+	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
+		SDL_CancelGPUCommandBuffer(cmds);
+		return false;
+	}
+	if (!swap) { SDL_SubmitGPUCommandBuffer(cmds); return true; }
+
+	if (has3D) {
+		SDL_GPUBlitInfo blit{};
+		blit.source.texture = frame.colorTarget;
+		blit.source.w = frame.width;
+		blit.source.h = frame.height;
+		blit.destination.texture = swap;
+		blit.destination.w = sw;
+		blit.destination.h = sh;
+		blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+		blit.flip_mode = SDL_FLIP_NONE;
+		blit.filter = SDL_GPU_FILTER_LINEAR;
+		blit.cycle = false;
+		SDL_BlitGPUTexture(cmds, &blit);
+	}
+
+	SDL_GPUTexture* canvasTex = canvas ? GetCanvasOverlayTexture(dev, canvas) : nullptr;
+	if (canvasTex) {
+		SDL_GPUColorTargetInfo ci{};
+		ci.texture = swap;
+		ci.load_op = has3D ? SDL_GPU_LOADOP_LOAD : SDL_GPU_LOADOP_CLEAR;
+		ci.store_op = SDL_GPU_STOREOP_STORE;
+		ci.clear_color = SDL_FColor{0,0,0,1};
+		SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &ci, 1, nullptr);
+		if (pass) {
+			SDL_GPUViewport vp{};
+			vp.x = 0; vp.y = 0; vp.w = (float)sw; vp.h = (float)sh;
+			vp.min_depth = 0.0f; vp.max_depth = 1.0f;
+			SDL_SetGPUViewport(pass, &vp);
+			DrawCanvasOverlay(dev, win, pass, canvasTex);
+			SDL_EndGPURenderPass(pass);
+		}
+	} else if (!has3D) {
+		SDL_GPUColorTargetInfo ci{};
+		ci.texture = swap;
+		ci.load_op = SDL_GPU_LOADOP_CLEAR;
+		ci.store_op = SDL_GPU_STOREOP_STORE;
+		ci.clear_color = SDL_FColor{0,0,0,1};
+		SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &ci, 1, nullptr);
+		if (pass) SDL_EndGPURenderPass(pass);
+	}
 
 	return SDL_SubmitGPUCommandBuffer(cmds);
 }

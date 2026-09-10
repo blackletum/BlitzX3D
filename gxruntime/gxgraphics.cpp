@@ -568,6 +568,20 @@ bool gxGraphics::presentSceneSDL(struct SDL_GPUDevice* dev, struct SDL_Window* w
 	return false;
 }
 
+bool gxGraphics::presentSceneWithCanvas(struct SDL_GPUDevice* dev, struct SDL_Window* win, gxCanvas* canvas) {
+	if (!dev || !win) return false;
+	for (gxScene* scene : scene_set) {
+		if (scene && (scene->hasGpuImage() || canvas)) {
+			if (scene->presentGpuFrameWithCanvas(dev, win, canvas)) return true;
+		}
+	}
+	if (canvas && scene_set.empty()) {
+		sdlgpu::GpuSceneFrame empty{};
+		if (sdlgpu::PresentSceneWithCanvas(dev, win, empty, canvas)) return true;
+	}
+	return false;
+}
+
 void gxGraphics::adoptCanvas(gxCanvas* c) {
 	canvas_set.insert(c);
 }

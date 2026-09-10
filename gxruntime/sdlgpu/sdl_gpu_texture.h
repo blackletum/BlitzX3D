@@ -15,8 +15,11 @@ namespace sdlgpu {
 	SDL_GPUTexture* CreateColorTarget(SDL_GPUDevice* dev, unsigned w, unsigned h);
 	SDL_GPUTexture* CreateDepthTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, int formatValue);
 
-	SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, gxCanvas* canvas);
+	SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas);
+	SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas);
 
+	void ReapRetiredTextures(SDL_GPUDevice* dev);
+	void TeardownTexturePools(SDL_GPUDevice* dev);
 }
 
 #endif

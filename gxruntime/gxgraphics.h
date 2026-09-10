@@ -130,6 +130,7 @@ public:
 	gxScene* verifyScene(gxScene* scene);
 	void freeScene(gxScene* scene);
 	bool presentSceneSDL(struct SDL_GPUDevice* dev, struct SDL_Window* win);
+	bool presentSceneWithCanvas(struct SDL_GPUDevice* dev, struct SDL_Window* win, gxCanvas* canvas);
 
 	void adoptCanvas(gxCanvas* c);
 

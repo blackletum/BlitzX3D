@@ -14,6 +14,7 @@
 
 #include "sdlgpu/sdl_gpu_context.h"
 #include "sdlgpu/sdl_gpu_pipeline.h"
+#include "sdlgpu/sdl_gpu_texture.h"
 
 static bool SetModernDPIAwareness() {
 	HMODULE hShcore = LoadLibraryW(L"shcore.dll");
@@ -463,12 +464,14 @@ void gxRuntime::flip(bool vwait) {
 
 	if (sdlGpu && sdlWindow) {
 		sdlgpu::SetVSync(sdlGpu, sdlWindow, vwait);
-		if (graphics && graphics->presentSceneSDL(sdlGpu, sdlWindow)) return;
+		sdlgpu::ReapRetiredTextures(sdlGpu);
+		gxCanvas* back = graphics ? graphics->getBackCanvas() : nullptr;
+		if (graphics && graphics->presentSceneWithCanvas(sdlGpu, sdlWindow, back)) return;
 		unsigned argb = graphics ? graphics->getBackCanvas()->getClsColor() : 0;
 		float r = ((argb >> 16) & 0xff) / 255.0f;
 		float g = ((argb >> 8) & 0xff) / 255.0f;
 		float b = (argb & 0xff) / 255.0f;
-		gxCanvas* back = graphics ? graphics->getBackCanvas() : nullptr;
+		back = graphics ? graphics->getBackCanvas() : nullptr;
 		bool blitted = false;
 		if (back && back->lock()) {
 			int w = back->getWidth(), h = back->getHeight();
@@ -867,6 +870,7 @@ void gxRuntime::pumpSDLWindowEvents() {
 
 void gxRuntime::destroySDLWindow() {
 	sdlgpu::TeardownPipelines();
+	if (sdlGpu) sdlgpu::TeardownTexturePools(sdlGpu);
 	if (sdlGpu && sdlWindow) sdlgpu::ReleaseWindow(sdlGpu, sdlWindow);
 	if (sdlGpu) {
 		sdlgpu::DestroyGPUDevice(sdlGpu);

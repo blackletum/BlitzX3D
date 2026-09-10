@@ -121,6 +121,7 @@ public:
 	void end();
 	bool hasGpuImage() const;
 	bool presentGpuFrame(struct SDL_GPUDevice* dev, struct SDL_Window* win);
+	bool presentGpuFrameWithCanvas(struct SDL_GPUDevice* dev, struct SDL_Window* win, gxCanvas* canvas);
 
 	//lighting
 	gxLight* createLight(int flags);

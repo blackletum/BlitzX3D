@@ -114,7 +114,7 @@ bool PresentSwapchain(SDL_GPUDevice* dev, SDL_Window* win, float r, float g, flo
 	if (!cmds) return false;
 	SDL_GPUTexture* tex = nullptr;
 	Uint32 w = 0, h = 0;
-	if (!SDL_AcquireGPUSwapchainTexture(cmds, win, &tex, &w, &h)) {
+	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &tex, &w, &h)) {
 		SDL_CancelGPUCommandBuffer(cmds);
 		return false;
 	}

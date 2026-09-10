@@ -1,13 +1,13 @@
 #ifndef SDL_GPU_SCENE_H
 #define SDL_GPU_SCENE_H
 
-#include <SDL3/SDL_gpu.h>
-
 struct SDL_GPUDevice;
 struct SDL_GPUCommandBuffer;
 struct SDL_GPURenderPass;
 struct SDL_GPUTexture;
 struct SDL_Window;
+
+class gxCanvas;
 
 namespace sdlgpu {
 
@@ -34,9 +34,10 @@ struct GpuSceneFrame {
 };
 
 bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsigned h, float clearR, float clearG, float clearB);
-void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt, bool alphaBlend, SDL_GPUCullMode cullMode);
+void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& uniforms, SDL_GPUTexture* tex, int first_vert, int vert_cnt, int first_tri, int tri_cnt, bool alphaBlend, int cullMode);
 void EndSceneFrame(GpuSceneFrame& frame);
 bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame);
+bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame, ::gxCanvas* canvas);
 void ReleaseSceneTargets(SDL_GPUDevice* dev, GpuSceneFrame& frame);
 
 }

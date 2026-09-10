@@ -1,7 +1,9 @@
 #include "sdl_gpu_mesh.h"
+#include "sdl_gpu_pipeline.h"
 
 #include "../std.h"
 
+#include <cstdio>
 #include <cstring>
 
 #include <SDL3/SDL_gpu.h>
@@ -33,37 +35,55 @@ GpuMesh* CreateMesh(SDL_GPUDevice* dev, unsigned vertStride, unsigned maxVerts, 
 }
 
 static bool UploadToBuffer(SDL_GPUDevice* dev, SDL_GPUBuffer* dst, const void* data, unsigned bytes) {
-	SDL_GPUTransferBufferCreateInfo bufInfo{};
-	bufInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-	bufInfo.size = bytes;
-	SDL_GPUTransferBuffer* buf = SDL_CreateGPUTransferBuffer(dev, &bufInfo);
+	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, bytes);
 	if (!buf) return false;
-	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, false);
-	if (!mapped) { SDL_ReleaseGPUTransferBuffer(dev, buf); return false; }
+	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, true);
+	if (!mapped) { ReleaseUploadTransferBuffer(dev, buf); return false; }
 	memcpy(mapped, data, bytes);
 	SDL_UnmapGPUTransferBuffer(dev, buf);
 
 	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
-	if (!cmds) { SDL_ReleaseGPUTransferBuffer(dev, buf); return false; }
+	if (!cmds) { ReleaseUploadTransferBuffer(dev, buf); return false; }
 	SDL_GPUCopyPass* pass = SDL_BeginGPUCopyPass(cmds);
 	SDL_GPUTransferBufferLocation src{};
 	src.transfer_buffer = buf;
 	SDL_GPUBufferRegion region{};
 	region.buffer = dst;
 	region.size = bytes;
-	SDL_UploadToGPUBuffer(pass, &src, &region, false);
+	SDL_UploadToGPUBuffer(pass, &src, &region, true);
 	SDL_EndGPUCopyPass(pass);
-	bool ok = SDL_SubmitGPUCommandBuffer(cmds);
-	SDL_ReleaseGPUTransferBuffer(dev, buf);
-	return ok;
+	SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmds);
+	ReleaseUploadTransferBufferWithFence(dev, buf, fence);
+	return fence != nullptr;
 }
 
 bool UploadMesh(SDL_GPUDevice* dev, GpuMesh* mesh, const void* vertData, unsigned vertBytes, const void* idxData, unsigned idxBytes) {
 	if (!dev || !mesh || !vertData || !idxData) return false;
 	if (!vertBytes || vertBytes > mesh->vertStride * mesh->maxVerts) return false;
 	if (!idxBytes || idxBytes > (unsigned)sizeof(unsigned short) * mesh->maxTris * 3) return false;
-	if (!UploadToBuffer(dev, mesh->verts, vertData, vertBytes)) return false;
-	return UploadToBuffer(dev, mesh->indices, idxData, idxBytes);
+	unsigned total = vertBytes + idxBytes;
+	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, total);
+	if (!buf) return UploadToBuffer(dev, mesh->verts, vertData, vertBytes) && UploadToBuffer(dev, mesh->indices, idxData, idxBytes);
+	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, true);
+	if (!mapped) { ReleaseUploadTransferBuffer(dev, buf); return false; }
+	memcpy(mapped, vertData, vertBytes);
+	memcpy((char*)mapped + vertBytes, idxData, idxBytes);
+	SDL_UnmapGPUTransferBuffer(dev, buf);
+	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
+	if (!cmds) { ReleaseUploadTransferBuffer(dev, buf); return false; }
+	SDL_GPUCopyPass* pass = SDL_BeginGPUCopyPass(cmds);
+	SDL_GPUTransferBufferLocation src{};
+	src.transfer_buffer = buf;
+	SDL_GPUBufferRegion vr{}; vr.buffer = mesh->verts; vr.offset = 0; vr.size = vertBytes;
+	src.offset = 0;
+	SDL_UploadToGPUBuffer(pass, &src, &vr, true);
+	SDL_GPUBufferRegion ir{}; ir.buffer = mesh->indices; ir.offset = 0; ir.size = idxBytes;
+	src.offset = vertBytes;
+	SDL_UploadToGPUBuffer(pass, &src, &ir, true);
+	SDL_EndGPUCopyPass(pass);
+	SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmds);
+	ReleaseUploadTransferBufferWithFence(dev, buf, fence);
+	return fence != nullptr;
 }
 
 void ReleaseMesh(SDL_GPUDevice* dev, GpuMesh* mesh) {
