@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_log.h>
 
 #include "shaders/mesh_shaders.h"
 #include "shaders/canvas_shaders.h"
@@ -109,6 +110,7 @@ namespace sdlgpu {
 		SDL_GPUTexture* tex = nullptr;
 		Uint32 sw = 0, sh = 0;
 		if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &tex, &sw, &sh)) {
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 			SDL_CancelGPUCommandBuffer(cmds);
 			if (buf) ReleaseUploadTransferBuffer(dev, buf);
 			return false;
@@ -222,8 +224,14 @@ namespace sdlgpu {
 	static SDL_GPUTextureFormat PickMeshDepthFormat(SDL_GPUDevice* dev) {
 		if (SDL_GPUTextureSupportsFormat(dev, SDL_GPU_TEXTUREFORMAT_D32_FLOAT, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
 			return SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+		if (SDL_GPUTextureSupportsFormat(dev, SDL_GPU_TEXTUREFORMAT_D24_UNORM, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
+			return SDL_GPU_TEXTUREFORMAT_D24_UNORM;
+		if (SDL_GPUTextureSupportsFormat(dev, SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
+			return SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT;
 		if (SDL_GPUTextureSupportsFormat(dev, SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
 			return SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT;
+		if (SDL_GPUTextureSupportsFormat(dev, SDL_GPU_TEXTUREFORMAT_D16_UNORM, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
+			return SDL_GPU_TEXTUREFORMAT_D16_UNORM;
 		return SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
 	}
 
@@ -399,25 +407,21 @@ namespace sdlgpu {
 			if (!boundTex) return;
 		}
 
-		 // someone cooked here....
-		__try {
-			SDL_BindGPUGraphicsPipeline(pass, meshPipe);
-			g_lastMeshPass = pass; g_lastMeshPipe = meshPipe;
-			SDL_PushGPUVertexUniformData(cmds, 0, uniforms, uniformBytes);
-			SDL_GPUBufferBinding vb{};
-			vb.buffer = mesh->verts;
-			SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
-			SDL_GPUBufferBinding ib{};
-			ib.buffer = mesh->indices;
-			SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-			SDL_GPUTextureSamplerBinding bind{};
-			bind.texture = boundTex;
-			bind.sampler = g_meshSamp;
-			SDL_BindGPUFragmentSamplers(pass, 0, &bind, 1);
-			SDL_DrawGPUIndexedPrimitives(pass, indexCount, 1, startIndex, firstVertex, 0);
-		} __except (EXCEPTION_EXECUTE_HANDLER) {
-			return;
-		}
+		// someone didnt cook here....
+		SDL_BindGPUGraphicsPipeline(pass, meshPipe);
+		g_lastMeshPass = pass; g_lastMeshPipe = meshPipe;
+		SDL_PushGPUVertexUniformData(cmds, 0, uniforms, uniformBytes);
+		SDL_GPUBufferBinding vb{};
+		vb.buffer = mesh->verts;
+		SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
+		SDL_GPUBufferBinding ib{};
+		ib.buffer = mesh->indices;
+		SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+		SDL_GPUTextureSamplerBinding bind{};
+		bind.texture = boundTex;
+		bind.sampler = g_meshSamp;
+		SDL_BindGPUFragmentSamplers(pass, 0, &bind, 1);
+		SDL_DrawGPUIndexedPrimitives(pass, indexCount, 1, startIndex, firstVertex, 0);
 	}
 
 	static bool EnsureCanvasPipeline(SDL_GPUDevice* dev, SDL_GPUTextureFormat swapFormat) {
@@ -502,10 +506,14 @@ namespace sdlgpu {
 		TeardownMeshPipe();
 		TeardownCanvas();
 		TeardownWhiteTexture();
+		for (auto& e : g_xferPending) {
+			if (e.fence && e.dev) SDL_WaitForGPUFences(e.dev, true, &e.fence, 1);
+			if (e.fence) SDL_ReleaseGPUFence(e.dev, e.fence);
+			if (e.buf && e.dev) SDL_ReleaseGPUTransferBuffer(e.dev, e.buf);
+		}
+		g_xferPending.clear();
 		for (auto& e : g_xferPool) if (e.buf && e.dev) SDL_ReleaseGPUTransferBuffer(e.dev, e.buf);
 		g_xferPool.clear();
-		for (auto& e : g_xferPending) { if (e.fence) SDL_ReleaseGPUFence(e.dev, e.fence); if (e.buf && e.dev) SDL_ReleaseGPUTransferBuffer(e.dev, e.buf); }
-		g_xferPending.clear();
 		g_xferSizes.clear();
 		g_lastMeshPass = nullptr; g_lastMeshPipe = nullptr;
 		g_lastCanvasPass = nullptr; g_lastCanvasPipe = nullptr;
@@ -513,12 +521,13 @@ namespace sdlgpu {
 
 	SDL_GPUTransferBuffer* AcquireUploadTransferBuffer(SDL_GPUDevice* dev, Uint32 size) {
 		for (auto it = g_xferPending.begin(); it != g_xferPending.end(); ) {
-			if (it->dev == dev && it->fence && SDL_QueryGPUFence(dev, it->fence)) {
-				SDL_ReleaseGPUFence(dev, it->fence);
-				g_xferPool.push_back({ it->buf, it->size, it->dev });
-				it = g_xferPending.erase(it);
-			}
-			else if (it->dev == dev && !it->fence) {
+			if (it->dev == dev && it->fence) {
+				if (SDL_QueryGPUFence(dev, it->fence)) {
+					SDL_ReleaseGPUFence(dev, it->fence);
+					g_xferPool.push_back({ it->buf, it->size, it->dev });
+					it = g_xferPending.erase(it);
+				} else ++it;
+			} else if (it->dev == dev && !it->fence) {
 				g_xferPool.push_back({ it->buf, it->size, it->dev });
 				it = g_xferPending.erase(it);
 			}
@@ -546,10 +555,14 @@ namespace sdlgpu {
 	}
 	void ReleaseUploadTransferBufferWithFence(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf, SDL_GPUFence* fence) {
 		if (!dev || !buf) { if (fence) SDL_ReleaseGPUFence(dev, fence); return; }
+		if (!fence) {
+			ReleaseUploadTransferBuffer(dev, buf);
+			return;
+		}
 		auto it = g_xferSizes.find(buf);
 		Uint32 sz = (it != g_xferSizes.end()) ? it->second : 0;
-		for (auto& e : g_xferPool) if (e.buf == buf) { if (fence) SDL_ReleaseGPUFence(dev, fence); return; }
-		for (auto& e : g_xferPending) if (e.buf == buf) { if (fence) SDL_ReleaseGPUFence(dev, fence); return; }
+		for (auto& e : g_xferPool) if (e.buf == buf) { SDL_ReleaseGPUFence(dev, fence); return; }
+		for (auto& e : g_xferPending) if (e.buf == buf) { SDL_ReleaseGPUFence(dev, fence); return; }
 		g_xferPending.push_back({ buf, sz, dev, fence });
 	}
 

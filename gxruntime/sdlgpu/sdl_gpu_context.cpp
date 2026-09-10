@@ -9,10 +9,13 @@
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_properties.h>
 #include <SDL3/SDL_video.h>
+#include <SDL3/SDL_log.h>
 
 #include "../gxruntime.h"
 #include "../gxgraphics.h"
 #include "../gxinput.h"
+
+#include <unordered_map>
 
 namespace sdlgpu {
 
@@ -80,9 +83,34 @@ void SetCursorVisible(bool vis) {
 }
 
 SDL_GPUDevice* CreateGPUDevice() {
-	return SDL_CreateGPUDevice(
+	SDL_PropertiesID props = SDL_CreateProperties();
+	if (props) {
+		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+#ifdef _DEBUG
+		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
+#else
+		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
+#endif
+		SDL_GPUDevice* dev = SDL_CreateGPUDeviceWithProperties(props);
+		SDL_DestroyProperties(props);
+		if (!dev) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDeviceWithProperties failed: %s", SDL_GetError());
+		}
+		if (dev) return dev;
+	}
+	SDL_GPUDevice* dev = SDL_CreateGPUDevice(
 		(SDL_GPUShaderFormat)(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL),
-		false, nullptr);
+#ifdef _DEBUG
+		true,
+#else
+		false,
+#endif
+		nullptr);
+	if (!dev) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDevice failed: %s", SDL_GetError());
+	}
+	return dev;
 }
 
 void DestroyGPUDevice(SDL_GPUDevice* dev) {
@@ -95,26 +123,45 @@ bool ClaimWindow(SDL_GPUDevice* dev, SDL_Window* win) {
 	return SDL_ClaimWindowForGPUDevice(dev, win);
 }
 
+namespace {
+	static std::unordered_map<SDL_Window*, SDL_GPUPresentMode> s_vsyncLastMode;
+}
+
 void ReleaseWindow(SDL_GPUDevice* dev, SDL_Window* win) {
 	if (!dev || !win) return;
+	s_vsyncLastMode.erase(win);
 	SDL_ReleaseWindowFromGPUDevice(dev, win);
 }
 
 void SetVSync(SDL_GPUDevice* dev, SDL_Window* win, bool vsync) {
 	if (!dev || !win) return;
-	static SDL_GPUPresentMode lastMode = SDL_GPU_PRESENTMODE_VSYNC;
 	SDL_GPUPresentMode want = vsync ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE;
-	if (want == lastMode) return;
-	if (SDL_SetGPUSwapchainParameters(dev, win, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, want)) lastMode = want;
+	auto it = s_vsyncLastMode.find(win);
+	SDL_GPUPresentMode cur = (it != s_vsyncLastMode.end()) ? it->second : SDL_GPU_PRESENTMODE_VSYNC;
+	if (want == cur && it != s_vsyncLastMode.end()) return;
+	if (want != SDL_GPU_PRESENTMODE_VSYNC && !SDL_WindowSupportsGPUPresentMode(dev, win, want)) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Present mode %d not supported, keeping VSYNC", (int)want);
+		want = SDL_GPU_PRESENTMODE_VSYNC;
+		if (want == cur && it != s_vsyncLastMode.end()) return;
+	}
+	if (SDL_SetGPUSwapchainParameters(dev, win, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, want)) {
+		s_vsyncLastMode[win] = want;
+	} else {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetGPUSwapchainParameters failed: %s", SDL_GetError());
+	}
 }
 
 bool PresentSwapchain(SDL_GPUDevice* dev, SDL_Window* win, float r, float g, float b) {
 	if (!dev || !win) return false;
 	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
-	if (!cmds) return false;
+	if (!cmds) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+		return false;
+	}
 	SDL_GPUTexture* tex = nullptr;
 	Uint32 w = 0, h = 0;
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &tex, &w, &h)) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 		SDL_CancelGPUCommandBuffer(cmds);
 		return false;
 	}
@@ -125,9 +172,13 @@ bool PresentSwapchain(SDL_GPUDevice* dev, SDL_Window* win, float r, float g, flo
 		target.store_op = SDL_GPU_STOREOP_STORE;
 		target.clear_color = SDL_FColor{ r, g, b, 1.0f };
 		SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &target, 1, nullptr);
-		SDL_EndGPURenderPass(pass);
+		if (pass) SDL_EndGPURenderPass(pass);
 	}
-	return SDL_SubmitGPUCommandBuffer(cmds);
+	if (!SDL_SubmitGPUCommandBuffer(cmds)) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_SubmitGPUCommandBuffer failed: %s", SDL_GetError());
+		return false;
+	}
+	return true;
 }
 
 int SdlScancodeToDIK(int sc) {
@@ -243,7 +294,7 @@ static void ForwardMouseMove(SDL_Window* win, gxRuntime* rt, int px, int py) {
 	int x = px, y = py;
 	if (rt->graphics && win) {
 		int ww = 0, wh = 0;
-		SDL_GetWindowSize(win, &ww, &wh);
+		if (!SDL_GetWindowSizeInPixels(win, &ww, &wh)) SDL_GetWindowSize(win, &ww, &wh);
 		int gw = rt->graphics->getWidth();
 		int gh = rt->graphics->getHeight();
 		if (ww > 0 && wh > 0 && gw > 0 && gh > 0 && (ww != gw || wh != gh)) {
@@ -279,8 +330,23 @@ void PumpEvents(SDL_Window* win, gxRuntime* rt) {
 			break;
 		case SDL_EVENT_TEXT_INPUT:
 			if (rt->input && ev.text.text) {
-				for (const char* p = ev.text.text; *p; ++p) {
-					rt->input->wm_char((unsigned char)*p, 1);
+				const char* p = ev.text.text;
+				while (*p) {
+					unsigned char c = (unsigned char)*p;
+					int cp = 0; int len = 0;
+					if (c < 0x80) { cp = c; len = 1; }
+					else if ((c & 0xE0) == 0xC0) { cp = c & 0x1F; len = 2; }
+					else if ((c & 0xF0) == 0xE0) { cp = c & 0x0F; len = 3; }
+					else if ((c & 0xF8) == 0xF0) { cp = c & 0x07; len = 4; }
+					else { ++p; continue; }
+					for (int i = 1; i < len; ++i) {
+						unsigned char cc = (unsigned char)p[i];
+						if ((cc & 0xC0) != 0x80) { len = i; break; }
+						cp = (cp << 6) | (cc & 0x3F);
+					}
+					rt->input->wm_char(cp, 1);
+					p += len;
+					if (len <= 0) ++p;
 				}
 			}
 			break;

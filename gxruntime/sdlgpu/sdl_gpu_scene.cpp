@@ -7,6 +7,7 @@
 #include "../gxcanvas.h"
 
 #include <cstdio>
+#include <SDL3/SDL_log.h>
 
 #include <SDL3/SDL_gpu.h>
 
@@ -98,16 +99,20 @@ bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame
 	if (frame.pass || frame.cmds) return false;
 
 	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
-	if (!cmds) return false;
+	if (!cmds) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+		return false;
+	}
 
 	SDL_GPUTexture* swap = nullptr;
 	Uint32 sw = 0, sh = 0;
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 		SDL_CancelGPUCommandBuffer(cmds);
 		return false;
 	}
 	if (!swap) {
-		SDL_SubmitGPUCommandBuffer(cmds);
+		if (!SDL_SubmitGPUCommandBuffer(cmds)) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Submit minimized frame failed: %s", SDL_GetError());
 		return true;
 	}
 
@@ -134,14 +139,18 @@ bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& 
 	if (has3D && (frame.pass || frame.cmds)) return false;
 
 	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
-	if (!cmds) return false;
+	if (!cmds) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+		return false;
+	}
 	SDL_GPUTexture* swap = nullptr;
 	Uint32 sw = 0, sh = 0;
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 		SDL_CancelGPUCommandBuffer(cmds);
 		return false;
 	}
-	if (!swap) { SDL_SubmitGPUCommandBuffer(cmds); return true; }
+	if (!swap) { if (!SDL_SubmitGPUCommandBuffer(cmds)) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Submit minimized frame failed: %s", SDL_GetError()); return true; }
 
 	if (has3D) {
 		SDL_GPUBlitInfo blit{};
