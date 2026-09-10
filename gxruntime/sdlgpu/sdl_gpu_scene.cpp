@@ -29,8 +29,7 @@ void ReleaseSceneTargets(SDL_GPUDevice* dev, GpuSceneFrame& frame) {
 bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsigned h, float clearR, float clearG, float clearB) {
 	if (!dev || !w || !h) return false;
 
-	bool clearMismatch = frame.colorTarget && (frame.optimClearR != clearR || frame.optimClearG != clearG || frame.optimClearB != clearB);
-	if (frame.dev != dev || frame.width != w || frame.height != h || !frame.colorTarget || !frame.depthTarget || clearMismatch) {
+	if (frame.dev != dev || frame.width != w || frame.height != h || !frame.colorTarget || !frame.depthTarget) {
 		ReleaseTargetsLocked(dev, frame);
 		frame.colorTarget = CreateColorTarget(dev, w, h, clearR, clearG, clearB, 1.0f);
 		frame.depthTarget = CreateDepthTarget(dev, w, h, MeshDepthFormat(dev), 1.0f, 0);
@@ -41,11 +40,11 @@ bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsig
 		frame.dev = dev;
 		frame.width = w;
 		frame.height = h;
-		frame.optimClearR = clearR;
-		frame.optimClearG = clearG;
-		frame.optimClearB = clearB;
-		frame.optimClearA = 1.0f;
 	}
+	frame.optimClearR = clearR;
+	frame.optimClearG = clearG;
+	frame.optimClearB = clearB;
+	frame.optimClearA = 1.0f;
 
 	frame.cmds = SDL_AcquireGPUCommandBuffer(dev);
 	if (!frame.cmds) return false;

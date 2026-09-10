@@ -3,6 +3,7 @@
 
 #include "../std.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -112,7 +113,7 @@ namespace sdlgpu {
 		if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &tex, &sw, &sh)) {
 			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 			SDL_CancelGPUCommandBuffer(cmds);
-			if (buf) ReleaseUploadTransferBuffer(dev, buf);
+			if (buf) SDL_ReleaseGPUTransferBuffer(dev, buf);
 			return false;
 		}
 		if (tex) {
@@ -138,18 +139,11 @@ namespace sdlgpu {
 				target.store_op = SDL_GPU_STOREOP_STORE;
 				target.clear_color = SDL_FColor{ r, g, b, 1.0f };
 				SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &target, 1, nullptr);
-				SDL_EndGPURenderPass(pass);
+				if (pass) SDL_EndGPURenderPass(pass);
 			}
 		}
-		bool ok = false;
-		if (buf) {
-			SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmds);
-			ok = fence != nullptr;
-			ReleaseUploadTransferBufferWithFence(dev, buf, fence);
-		}
-		else {
-			ok = SDL_SubmitGPUCommandBuffer(cmds);
-		}
+		bool ok = SDL_SubmitGPUCommandBuffer(cmds);
+		if (buf) SDL_ReleaseGPUTransferBuffer(dev, buf);
 		return ok;
 	}
 
@@ -183,11 +177,6 @@ namespace sdlgpu {
 		SDL_GPURenderPass* g_lastCanvasPass = nullptr;
 		SDL_GPUGraphicsPipeline* g_lastCanvasPipe = nullptr;
 
-		struct PooledXfer { SDL_GPUTransferBuffer* buf = nullptr; Uint32 size = 0; SDL_GPUDevice* dev = nullptr; };
-		std::vector<PooledXfer> g_xferPool;
-		std::unordered_map<SDL_GPUTransferBuffer*, Uint32> g_xferSizes;
-		struct PendingXfer { SDL_GPUTransferBuffer* buf = nullptr; Uint32 size = 0; SDL_GPUDevice* dev = nullptr; SDL_GPUFence* fence = nullptr; };
-		std::vector<PendingXfer> g_xferPending;
 	}
 
 	static void TeardownMeshPipe() {
@@ -261,7 +250,7 @@ namespace sdlgpu {
 		unsigned char white[4] = { 255, 255, 255, 255 };
 		SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, 4);
 		if (!buf) { SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
-		void* dst = SDL_MapGPUTransferBuffer(dev, buf, true);
+		void* dst = SDL_MapGPUTransferBuffer(dev, buf, false);
 		if (!dst) { ReleaseUploadTransferBuffer(dev, buf); SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 		memcpy(dst, white, 4);
 		SDL_UnmapGPUTransferBuffer(dev, buf);
@@ -278,11 +267,10 @@ namespace sdlgpu {
 		reg.w = 1;
 		reg.h = 1;
 		reg.d = 1;
-		SDL_UploadToGPUTexture(copy, &src, &reg, true);
+		SDL_UploadToGPUTexture(copy, &src, &reg, false);
 		SDL_EndGPUCopyPass(copy);
-		SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmds);
-		bool ok = fence != nullptr;
-		ReleaseUploadTransferBufferWithFence(dev, buf, fence);
+		bool ok = SDL_SubmitGPUCommandBuffer(cmds);
+		ReleaseUploadTransferBuffer(dev, buf);
 		if (!ok) { SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 
 		g_whiteDev = dev;
@@ -480,10 +468,11 @@ namespace sdlgpu {
 		SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
 		SDL_GPUTransferBufferLocation src{}; src.transfer_buffer = tb;
 		SDL_GPUBufferRegion reg{}; reg.buffer = g_canvasVB; reg.size = sizeof(verts);
-		SDL_UploadToGPUBuffer(cp, &src, &reg, true);
-		SDL_EndGPUCopyPass(cp); SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cb);
-		ReleaseUploadTransferBufferWithFence(dev, tb, fence);
-		if (!fence) { SDL_ReleaseGPUBuffer(dev, g_canvasVB); g_canvasVB = nullptr; return false; }
+		SDL_UploadToGPUBuffer(cp, &src, &reg, false);
+		SDL_EndGPUCopyPass(cp);
+		bool ok = SDL_SubmitGPUCommandBuffer(cb);
+		SDL_ReleaseGPUTransferBuffer(dev, tb);
+		if (!ok) { SDL_ReleaseGPUBuffer(dev, g_canvasVB); g_canvasVB = nullptr; return false; }
 		return true;
 	}
 
@@ -506,64 +495,19 @@ namespace sdlgpu {
 		TeardownMeshPipe();
 		TeardownCanvas();
 		TeardownWhiteTexture();
-		for (auto& e : g_xferPending) {
-			if (e.fence && e.dev) SDL_WaitForGPUFences(e.dev, true, &e.fence, 1);
-			if (e.fence) SDL_ReleaseGPUFence(e.dev, e.fence);
-			if (e.buf && e.dev) SDL_ReleaseGPUTransferBuffer(e.dev, e.buf);
-		}
-		g_xferPending.clear();
-		for (auto& e : g_xferPool) if (e.buf && e.dev) SDL_ReleaseGPUTransferBuffer(e.dev, e.buf);
-		g_xferPool.clear();
-		g_xferSizes.clear();
 		g_lastMeshPass = nullptr; g_lastMeshPipe = nullptr;
 		g_lastCanvasPass = nullptr; g_lastCanvasPipe = nullptr;
 	}
 
 	SDL_GPUTransferBuffer* AcquireUploadTransferBuffer(SDL_GPUDevice* dev, Uint32 size) {
-		for (auto it = g_xferPending.begin(); it != g_xferPending.end(); ) {
-			if (it->dev == dev && it->fence) {
-				if (SDL_QueryGPUFence(dev, it->fence)) {
-					SDL_ReleaseGPUFence(dev, it->fence);
-					g_xferPool.push_back({ it->buf, it->size, it->dev });
-					it = g_xferPending.erase(it);
-				} else ++it;
-			} else if (it->dev == dev && !it->fence) {
-				g_xferPool.push_back({ it->buf, it->size, it->dev });
-				it = g_xferPending.erase(it);
-			}
-			else ++it;
-		}
-		for (auto it = g_xferPool.begin(); it != g_xferPool.end(); ++it) {
-			if (it->dev == dev && it->size >= size && it->buf) {
-				SDL_GPUTransferBuffer* b = it->buf;
-				g_xferPool.erase(it);
-				return b;
-			}
-		}
-		SDL_GPUTransferBufferCreateInfo ci{}; ci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD; ci.size = size;
-		SDL_GPUTransferBuffer* b = SDL_CreateGPUTransferBuffer(dev, &ci);
-		if (b) { g_xferSizes[b] = size; }
-		return b;
+		SDL_GPUTransferBufferCreateInfo ci{};
+		ci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+		ci.size = size;
+		return SDL_CreateGPUTransferBuffer(dev, &ci);
 	}
 	void ReleaseUploadTransferBuffer(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf) {
 		if (!dev || !buf) return;
-		auto it = g_xferSizes.find(buf);
-		Uint32 sz = (it != g_xferSizes.end()) ? it->second : 0;
-		for (auto& e : g_xferPool) if (e.buf == buf) return;
-		for (auto& e : g_xferPending) if (e.buf == buf) return;
-		g_xferPool.push_back({ buf, sz, dev });
-	}
-	void ReleaseUploadTransferBufferWithFence(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf, SDL_GPUFence* fence) {
-		if (!dev || !buf) { if (fence) SDL_ReleaseGPUFence(dev, fence); return; }
-		if (!fence) {
-			ReleaseUploadTransferBuffer(dev, buf);
-			return;
-		}
-		auto it = g_xferSizes.find(buf);
-		Uint32 sz = (it != g_xferSizes.end()) ? it->second : 0;
-		for (auto& e : g_xferPool) if (e.buf == buf) { SDL_ReleaseGPUFence(dev, fence); return; }
-		for (auto& e : g_xferPending) if (e.buf == buf) { SDL_ReleaseGPUFence(dev, fence); return; }
-		g_xferPending.push_back({ buf, sz, dev, fence });
+		SDL_ReleaseGPUTransferBuffer(dev, buf);
 	}
 
 }

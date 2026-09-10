@@ -97,7 +97,12 @@ SDL_GPUDevice* CreateGPUDevice() {
 		if (!dev) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDeviceWithProperties failed: %s", SDL_GetError());
 		}
-		if (dev) return dev;
+		if (dev) {
+			if (!SDL_SetGPUAllowedFramesInFlight(dev, 3)) {
+				SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetGPUAllowedFramesInFlight(3) failed: %s", SDL_GetError());
+			}
+			return dev;
+		}
 	}
 	SDL_GPUDevice* dev = SDL_CreateGPUDevice(
 		(SDL_GPUShaderFormat)(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL),
@@ -109,6 +114,10 @@ SDL_GPUDevice* CreateGPUDevice() {
 		nullptr);
 	if (!dev) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDevice failed: %s", SDL_GetError());
+	} else {
+		if (!SDL_SetGPUAllowedFramesInFlight(dev, 3)) {
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetGPUAllowedFramesInFlight(3) failed: %s", SDL_GetError());
+		}
 	}
 	return dev;
 }
@@ -140,8 +149,13 @@ void SetVSync(SDL_GPUDevice* dev, SDL_Window* win, bool vsync) {
 	SDL_GPUPresentMode cur = (it != s_vsyncLastMode.end()) ? it->second : SDL_GPU_PRESENTMODE_VSYNC;
 	if (want == cur && it != s_vsyncLastMode.end()) return;
 	if (want != SDL_GPU_PRESENTMODE_VSYNC && !SDL_WindowSupportsGPUPresentMode(dev, win, want)) {
-		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Present mode %d not supported, keeping VSYNC", (int)want);
-		want = SDL_GPU_PRESENTMODE_VSYNC;
+		if (want == SDL_GPU_PRESENTMODE_IMMEDIATE && SDL_WindowSupportsGPUPresentMode(dev, win, SDL_GPU_PRESENTMODE_MAILBOX)) {
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Present mode IMMEDIATE not supported, falling back to MAILBOX");
+			want = SDL_GPU_PRESENTMODE_MAILBOX;
+		} else {
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Present mode %d not supported, keeping VSYNC", (int)want);
+			want = SDL_GPU_PRESENTMODE_VSYNC;
+		}
 		if (want == cur && it != s_vsyncLastMode.end()) return;
 	}
 	if (SDL_SetGPUSwapchainParameters(dev, win, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, want)) {

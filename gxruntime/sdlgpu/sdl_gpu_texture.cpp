@@ -24,47 +24,12 @@ static struct CanvasTexEntry {
 static std::unordered_map< ::gxCanvas*, CanvasTexEntry> g_canvasTexMap;
 static std::unordered_map< ::gxCanvas*, CanvasTexEntry> g_canvasOverlayMap;
 
-namespace {
-	struct RetiredTexture { SDL_GPUTexture* tex = nullptr; SDL_GPUDevice* dev = nullptr; SDL_GPUFence* fence = nullptr; };
-	std::vector<RetiredTexture> g_retiredTextures;
-}
-
 static void RetireTexture(SDL_GPUDevice* dev, SDL_GPUTexture* tex) {
 	if (!dev || !tex) return;
-	for (auto it = g_retiredTextures.begin(); it != g_retiredTextures.end(); ) {
-		if (it->dev == dev && it->fence && SDL_QueryGPUFence(dev, it->fence)) {
-			SDL_ReleaseGPUFence(dev, it->fence);
-			SDL_ReleaseGPUTexture(dev, it->tex);
-			it = g_retiredTextures.erase(it);
-		} else ++it;
-	}
-	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
-	SDL_GPUFence* fence = cmds ? SDL_SubmitGPUCommandBufferAndAcquireFence(cmds) : nullptr;
-	if (!fence) {
-		SDL_ReleaseGPUTexture(dev, tex);
-		return;
-	}
-	g_retiredTextures.push_back({ tex, dev, fence });
-}
-
-void ReapRetiredTextures(SDL_GPUDevice* dev) {
-	for (auto it = g_retiredTextures.begin(); it != g_retiredTextures.end(); ) {
-		if (it->dev == dev && it->fence && SDL_QueryGPUFence(dev, it->fence)) {
-			SDL_ReleaseGPUFence(dev, it->fence);
-			SDL_ReleaseGPUTexture(dev, it->tex);
-			it = g_retiredTextures.erase(it);
-		} else ++it;
-	}
+	SDL_ReleaseGPUTexture(dev, tex);
 }
 
 void TeardownTexturePools(SDL_GPUDevice* dev) {
-	for (auto it = g_retiredTextures.begin(); it != g_retiredTextures.end(); ) {
-		if (it->dev == dev) {
-			if (it->fence) SDL_ReleaseGPUFence(dev, it->fence);
-			if (it->tex) SDL_ReleaseGPUTexture(dev, it->tex);
-			it = g_retiredTextures.erase(it);
-		} else ++it;
-	}
 	for (auto it = g_canvasTexMap.begin(); it != g_canvasTexMap.end(); ) {
 		if (it->second.dev == dev) {
 			if (it->second.tex) SDL_ReleaseGPUTexture(dev, it->second.tex);
@@ -89,17 +54,24 @@ SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) {
 	if (it != g_canvasTexMap.end() && it->second.tex && it->second.dev == dev && it->second.modCnt == mod && it->second.w == w && it->second.h == h) {
 		return it->second.tex;
 	}
-	SDL_GPUTexture* old = nullptr;
-	if (it != g_canvasTexMap.end()) { old = it->second.tex; g_canvasTexMap.erase(it); }
-	if (old) RetireTexture(dev, old);
-
-	SDL_GPUTexture* tex = CreateTexture2D(dev, w, h);
-	if (!tex) return nullptr;
+	SDL_GPUTexture* tex = nullptr;
+	bool isNew = false;
+	if (it != g_canvasTexMap.end() && it->second.tex && it->second.dev == dev && it->second.w == w && it->second.h == h) {
+		tex = it->second.tex;
+	}
+	else {
+		SDL_GPUTexture* old = nullptr;
+		if (it != g_canvasTexMap.end()) { old = it->second.tex; g_canvasTexMap.erase(it); }
+		if (old) RetireTexture(dev, old);
+		tex = CreateTexture2D(dev, w, h);
+		if (!tex) return nullptr;
+		isNew = true;
+	}
 
 	std::vector<unsigned char> rgba;
 	rgba.resize((size_t)w * h * 4);
 
-	if (!canvas->lock()) { SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	if (!canvas->lock()) { if (isNew) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	for (unsigned y = 0; y < h; ++y) {
 		for (unsigned x = 0; x < w; ++x) {
 			unsigned argb = canvas->getPixelFast((int)x, (int)y);
@@ -113,7 +85,7 @@ SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) {
 	canvas->unlock();
 
 	if (!UploadTextureRGBA(dev, tex, w, h, rgba.data())) {
-		SDL_ReleaseGPUTexture(dev, tex);
+		if (isNew) SDL_ReleaseGPUTexture(dev, tex);
 		return nullptr;
 	}
 	CanvasTexEntry e;
@@ -132,14 +104,22 @@ SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) 
 	if (it != g_canvasOverlayMap.end() && it->second.tex && it->second.dev == dev && it->second.modCnt == mod && it->second.w == w && it->second.h == h) {
 		return it->second.tex;
 	}
-	SDL_GPUTexture* old = nullptr;
-	if (it != g_canvasOverlayMap.end()) { old = it->second.tex; g_canvasOverlayMap.erase(it); }
-	if (old) RetireTexture(dev, old);
-	SDL_GPUTexture* tex = CreateTexture2D(dev, w, h);
-	if (!tex) return nullptr;
+	SDL_GPUTexture* tex = nullptr;
+	bool isNew = false;
+	if (it != g_canvasOverlayMap.end() && it->second.tex && it->second.dev == dev && it->second.w == w && it->second.h == h) {
+		tex = it->second.tex;
+	}
+	else {
+		SDL_GPUTexture* old = nullptr;
+		if (it != g_canvasOverlayMap.end()) { old = it->second.tex; g_canvasOverlayMap.erase(it); }
+		if (old) RetireTexture(dev, old);
+		tex = CreateTexture2D(dev, w, h);
+		if (!tex) return nullptr;
+		isNew = true;
+	}
 	std::vector<unsigned char> rgba;
 	rgba.resize((size_t)w * h * 4);
-	if (!canvas->lock()) { SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	if (!canvas->lock()) { if (isNew) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	unsigned clsRgb = canvas->getClsColor() & 0x00ffffff;
 	for (unsigned y = 0; y < h; ++y) {
 		for (unsigned x = 0; x < w; ++x) {
@@ -154,7 +134,7 @@ SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) 
 		}
 	}
 	canvas->unlock();
-	if (!UploadTextureRGBA(dev, tex, w, h, rgba.data())) { SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	if (!UploadTextureRGBA(dev, tex, w, h, rgba.data())) { if (isNew) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	CanvasTexEntry e; e.tex = tex; e.dev = dev; e.modCnt = mod; e.w = w; e.h = h;
 	g_canvasOverlayMap[canvas] = e;
 	return tex;
@@ -181,7 +161,7 @@ bool UploadTextureRGBA(SDL_GPUDevice* dev, SDL_GPUTexture* tex, unsigned w, unsi
 	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, size);
 	if (!buf) return false;
 
-	void* dst = SDL_MapGPUTransferBuffer(dev, buf, true);
+	void* dst = SDL_MapGPUTransferBuffer(dev, buf, false);
 	if (!dst) { ReleaseUploadTransferBuffer(dev, buf); return false; }
 	memcpy(dst, px, size);
 	SDL_UnmapGPUTransferBuffer(dev, buf);
@@ -201,11 +181,11 @@ bool UploadTextureRGBA(SDL_GPUDevice* dev, SDL_GPUTexture* tex, unsigned w, unsi
 	dstReg.h = h;
 	dstReg.d = 1;
 
-	SDL_UploadToGPUTexture(pass, &src, &dstReg, true);
+	SDL_UploadToGPUTexture(pass, &src, &dstReg, false);
 	SDL_EndGPUCopyPass(pass);
-	SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmds);
-	ReleaseUploadTransferBufferWithFence(dev, buf, fence);
-	return fence != nullptr;
+	bool ok = SDL_SubmitGPUCommandBuffer(cmds);
+	SDL_ReleaseGPUTransferBuffer(dev, buf);
+	return ok;
 }
 
 void ReleaseTexture(SDL_GPUDevice* dev, SDL_GPUTexture* tex) {

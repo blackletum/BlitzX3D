@@ -20,7 +20,6 @@ namespace sdlgpu {
 	SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas);
 	SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas);
 
-	void ReapRetiredTextures(SDL_GPUDevice* dev);
 	void TeardownTexturePools(SDL_GPUDevice* dev);
 }
 
