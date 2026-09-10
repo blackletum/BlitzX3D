@@ -870,7 +870,7 @@ void App::drawOutput() {
 
 	ImGui::PushStyleColor(ImGuiCol_Text, compileOK ? IM_COL32(200, 255, 200, 255) : IM_COL32(255, 200, 200, 255));
 	ImGui::InputTextMultiline("##output", (char*)outputView.c_str(), (int)outputView.capacity() + 1,
-		ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4),
+		ImVec2(ImGui::GetContentRegionAvail().x, -ImGui::GetFrameHeightWithSpacing() - 4),
 		ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_CallbackResize,
 		OutputTextResizeCallback, (void*)&outputView);
 	ImGui::PopStyleColor();
