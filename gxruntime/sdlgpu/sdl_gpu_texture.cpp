@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_properties.h>
 
 namespace sdlgpu {
 
@@ -213,7 +214,18 @@ void ReleaseTexture(SDL_GPUDevice* dev, SDL_GPUTexture* tex) {
 }
 
 SDL_GPUTexture* CreateColorTarget(SDL_GPUDevice* dev, unsigned w, unsigned h) {
+	return CreateColorTarget(dev, w, h, 0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+SDL_GPUTexture* CreateColorTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, float r, float g, float b, float a) {
 	if (!dev || !w || !h) return nullptr;
+	SDL_PropertiesID props = SDL_CreateProperties();
+	if (props) {
+		SDL_SetFloatProperty(props, SDL_PROP_GPU_TEXTURE_CREATE_D3D12_CLEAR_R_FLOAT, r);
+		SDL_SetFloatProperty(props, SDL_PROP_GPU_TEXTURE_CREATE_D3D12_CLEAR_G_FLOAT, g);
+		SDL_SetFloatProperty(props, SDL_PROP_GPU_TEXTURE_CREATE_D3D12_CLEAR_B_FLOAT, b);
+		SDL_SetFloatProperty(props, SDL_PROP_GPU_TEXTURE_CREATE_D3D12_CLEAR_A_FLOAT, a);
+	}
 	SDL_GPUTextureCreateInfo info{};
 	info.type = SDL_GPU_TEXTURETYPE_2D;
 	info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
@@ -223,11 +235,23 @@ SDL_GPUTexture* CreateColorTarget(SDL_GPUDevice* dev, unsigned w, unsigned h) {
 	info.layer_count_or_depth = 1;
 	info.num_levels = 1;
 	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-	return SDL_CreateGPUTexture(dev, &info);
+	info.props = props;
+	SDL_GPUTexture* tex = SDL_CreateGPUTexture(dev, &info);
+	if (props) SDL_DestroyProperties(props);
+	return tex;
 }
 
 SDL_GPUTexture* CreateDepthTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, int formatValue) {
+	return CreateDepthTarget(dev, w, h, formatValue, 1.0f, 0);
+}
+
+SDL_GPUTexture* CreateDepthTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, int formatValue, float depth, unsigned char stencil) {
 	if (!dev || !w || !h) return nullptr;
+	SDL_PropertiesID props = SDL_CreateProperties();
+	if (props) {
+		SDL_SetFloatProperty(props, SDL_PROP_GPU_TEXTURE_CREATE_D3D12_CLEAR_DEPTH_FLOAT, depth);
+		SDL_SetNumberProperty(props, SDL_PROP_GPU_TEXTURE_CREATE_D3D12_CLEAR_STENCIL_NUMBER, stencil);
+	}
 	SDL_GPUTextureCreateInfo info{};
 	info.type = SDL_GPU_TEXTURETYPE_2D;
 	info.format = (SDL_GPUTextureFormat)formatValue;
@@ -237,7 +261,10 @@ SDL_GPUTexture* CreateDepthTarget(SDL_GPUDevice* dev, unsigned w, unsigned h, in
 	info.layer_count_or_depth = 1;
 	info.num_levels = 1;
 	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-	return SDL_CreateGPUTexture(dev, &info);
+	info.props = props;
+	SDL_GPUTexture* tex = SDL_CreateGPUTexture(dev, &info);
+	if (props) SDL_DestroyProperties(props);
+	return tex;
 }
 
 }
