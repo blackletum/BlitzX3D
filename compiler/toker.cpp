@@ -468,8 +468,8 @@ void Toker::nextline()
                     bool matched = false;
                     for (const auto& [name, value] : MacroDefines) {
                         if (line.compare(pos, name.size(), name) == 0 &&
-                            (pos == 0 || (!isalnum(line[pos - 1]) && line[pos - 1] != '_')) &&
-                            (pos + name.size() == line.size() || (!isalnum(line[pos + name.size()]) && line[pos + name.size()] != '_'))) {
+                            (pos == 0 || (!isalnum((unsigned char)line[pos - 1]) && line[pos - 1] != '_')) &&
+                            (pos + name.size() == line.size() || (!isalnum((unsigned char)line[pos + name.size()]) && line[pos + name.size()] != '_'))) {
                             newLine += value;
                             pos += name.size();
                             changed = true;
@@ -496,24 +496,24 @@ void Toker::nextline()
             tokes.push_back(Toke(c, from, ++k));
             continue;
         }
-        if (isspace(c)) { ++k; continue; }
+        if (isspace((unsigned char)c)) { ++k; continue; }
         if (c == ';')
         {
             for (++k; line[k] != '\n'; ++k) {}
             continue;
         }
-        if (c == '.' && isdigit(line[k + 1]))
+        if (c == '.' && isdigit((unsigned char)line[k + 1]))
         {
-            for (k += 2; isdigit(line[k]); ++k) {}
+            for (k += 2; isdigit((unsigned char)line[k]); ++k) {}
             tokes.push_back(Toke(FLOATCONST, from, k));
             continue;
         }
-        if (isdigit(c))
+        if (isdigit((unsigned char)c))
         {
-            for (++k; isdigit(line[k]); ++k) {}
+            for (++k; isdigit((unsigned char)line[k]); ++k) {}
             if (line[k] == '.')
             {
-                for (++k; isdigit(line[k]); ++k) {}
+                for (++k; isdigit((unsigned char)line[k]); ++k) {}
                 tokes.push_back(Toke(FLOATCONST, from, k));
                 continue;
             }
@@ -526,15 +526,15 @@ void Toker::nextline()
             tokes.push_back(Toke(BINCONST, from, k));
             continue;
         }
-        if (c == '$' && isxdigit(line[k + 1]))
+        if (c == '$' && isxdigit((unsigned char)line[k + 1]))
         {
-            for (k += 2; isxdigit(line[k]); ++k) {}
+            for (k += 2; isxdigit((unsigned char)line[k]); ++k) {}
             tokes.push_back(Toke(HEXCONST, from, k));
             continue;
         }
-        if (isalpha(c))
+        if (isalpha((unsigned char)c))
         {
-            for (++k; isalnum(line[k]) || line[k] == '_'
+            for (++k; isalnum((unsigned char)line[k]) || line[k] == '_'
 #ifdef XBETA
                 || line[k] == '\''
 #endif
@@ -543,10 +543,10 @@ void Toker::nextline()
 
             std::string ident = tolower(line.substr(from, k - from));
 
-            if (line[k] == ' ' && isalpha(line[k + 1]))
+            if (line[k] == ' ' && isalpha((unsigned char)line[k + 1]))
             {
                 int t = k;
-                for (t += 2; isalnum(line[t]) || line[t] == '_'; ++t) {}
+                for (t += 2; isalnum((unsigned char)line[t]) || line[t] == '_'; ++t) {}
                 std::string s = tolower(line.substr(from, t - from));
                 if (lowerTokes.find(s) != lowerTokes.end())
                 {
@@ -558,7 +558,7 @@ void Toker::nextline()
 
             if (it == lowerTokes.end())
             {
-                for (int n = from; n < k; ++n) line[n] = tolower(line[n]);
+                for (int n = from; n < k; ++n) line[n] = tolower((unsigned char)line[n]);
                 tokes.push_back(Toke(IDENT, from, k));
                 continue;
             }
@@ -636,9 +636,9 @@ int Toker::next()
 }
 
 bool Toker::isValidIdentifier(const std::string& str) {
-    if (str.empty() || !isalpha(str[0])) return false;
+    if (str.empty() || !isalpha((unsigned char)str[0])) return false;
     for (char c : str) {
-        if (!isalnum(c) && c != '_' && c != '(' && c != ')') return false;
+        if (!isalnum((unsigned char)c) && c != '_' && c != '(' && c != ')') return false;
     }
     return true;
 }

@@ -1124,7 +1124,7 @@ ExprNode* Parser::parsePrimary(bool opt) {
 		break;
 	case HEXCONST:
 		n = 0; t = toker->text();
-		for (k = 1; k < t.size(); ++k) n = (n << 4) | (isdigit(t[k]) ? t[k] & 0xf : (t[k] & 7) + 9);
+		for (k = 1; k < t.size(); ++k) n = (n << 4) | (isdigit((unsigned char)t[k]) ? t[k] & 0xf : (t[k] & 7) + 9);
 		result = new IntConstNode(n);
 		toker->next();
 		break;

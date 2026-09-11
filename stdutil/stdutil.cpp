@@ -212,13 +212,13 @@ std::string ftoa(float n) {
 
 std::string tolower(const std::string& s) {
 	std::string t = s;
-	for(int k = 0; k < t.size(); ++k) t[k] = tolower(t[k]);
+	for(int k = 0; k < t.size(); ++k) t[k] = tolower((unsigned char)t[k]);
 	return t;
 }
 
 std::string toupper(const std::string& s) {
 	std::string t = s;
-	for(int k = 0; k < t.size(); ++k) t[k] = toupper(t[k]);
+	for(int k = 0; k < t.size(); ++k) t[k] = toupper((unsigned char)t[k]);
 	return t;
 }
 
