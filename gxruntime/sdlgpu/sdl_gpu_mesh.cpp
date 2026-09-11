@@ -34,10 +34,10 @@ GpuMesh* CreateMesh(SDL_GPUDevice* dev, unsigned vertStride, unsigned maxVerts, 
 	return mesh;
 }
 
-static bool UploadToBuffer(SDL_GPUDevice* dev, SDL_GPUBuffer* dst, const void* data, unsigned bytes) {
+static bool UploadToBuffer(SDL_GPUDevice* dev, SDL_GPUBuffer* dst, unsigned dstOff, const void* data, unsigned bytes) {
 	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, bytes);
 	if (!buf) return false;
-	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, false);
+	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, true);
 	if (!mapped) { ReleaseUploadTransferBuffer(dev, buf); return false; }
 	memcpy(mapped, data, bytes);
 	SDL_UnmapGPUTransferBuffer(dev, buf);
@@ -49,41 +49,56 @@ static bool UploadToBuffer(SDL_GPUDevice* dev, SDL_GPUBuffer* dst, const void* d
 	src.transfer_buffer = buf;
 	SDL_GPUBufferRegion region{};
 	region.buffer = dst;
+	region.offset = dstOff;
 	region.size = bytes;
-	SDL_UploadToGPUBuffer(pass, &src, &region, false);
+	SDL_UploadToGPUBuffer(pass, &src, &region, true);
 	SDL_EndGPUCopyPass(pass);
 	bool ok = SDL_SubmitGPUCommandBuffer(cmds);
-	SDL_ReleaseGPUTransferBuffer(dev, buf);
+	ReleaseUploadTransferBuffer(dev, buf);
 	return ok;
 }
 
-bool UploadMesh(SDL_GPUDevice* dev, GpuMesh* mesh, const void* vertData, unsigned vertBytes, const void* idxData, unsigned idxBytes) {
-	if (!dev || !mesh || !vertData || !idxData) return false;
-	if (!vertBytes || vertBytes > mesh->vertStride * mesh->maxVerts) return false;
-	if (!idxBytes || idxBytes > (unsigned)sizeof(unsigned short) * mesh->maxTris * 3) return false;
-	unsigned total = vertBytes + idxBytes;
+bool UploadMeshRange(SDL_GPUDevice* dev, GpuMesh* mesh, const void* vertBase, unsigned vertDstOff, unsigned vertBytes, const void* idxBase, unsigned idxDstOff, unsigned idxBytes) {
+	if (!dev || !mesh || !mesh->verts || !mesh->indices) return false;
+	if (!vertBytes && !idxBytes) return true;
+	if (vertBytes) {
+		if (!vertBase) return false;
+		if (vertDstOff + vertBytes > mesh->vertStride * mesh->maxVerts) return false;
+	}
+	if (idxBytes) {
+		if (!idxBase) return false;
+		if (idxDstOff + idxBytes > (unsigned)sizeof(unsigned short) * mesh->maxTris * 3) return false;
+	}
+	if (!vertBytes) return UploadToBuffer(dev, mesh->indices, idxDstOff, idxBase, idxBytes);
+	if (!idxBytes) return UploadToBuffer(dev, mesh->verts, vertDstOff, vertBase, vertBytes);
+	unsigned alignedVertBytes = (vertBytes + 511u) & ~511u;
+	unsigned total = alignedVertBytes + idxBytes;
 	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, total);
-	if (!buf) return UploadToBuffer(dev, mesh->verts, vertData, vertBytes) && UploadToBuffer(dev, mesh->indices, idxData, idxBytes);
-	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, false);
+	if (!buf) return UploadToBuffer(dev, mesh->verts, vertDstOff, vertBase, vertBytes) && UploadToBuffer(dev, mesh->indices, idxDstOff, idxBase, idxBytes);
+	void* mapped = SDL_MapGPUTransferBuffer(dev, buf, true);
 	if (!mapped) { ReleaseUploadTransferBuffer(dev, buf); return false; }
-	memcpy(mapped, vertData, vertBytes);
-	memcpy((char*)mapped + vertBytes, idxData, idxBytes);
+	memcpy(mapped, vertBase, vertBytes);
+	memcpy((char*)mapped + alignedVertBytes, idxBase, idxBytes);
 	SDL_UnmapGPUTransferBuffer(dev, buf);
 	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
 	if (!cmds) { ReleaseUploadTransferBuffer(dev, buf); return false; }
 	SDL_GPUCopyPass* pass = SDL_BeginGPUCopyPass(cmds);
 	SDL_GPUTransferBufferLocation src{};
 	src.transfer_buffer = buf;
-	SDL_GPUBufferRegion vr{}; vr.buffer = mesh->verts; vr.offset = 0; vr.size = vertBytes;
+	SDL_GPUBufferRegion vr{}; vr.buffer = mesh->verts; vr.offset = vertDstOff; vr.size = vertBytes;
 	src.offset = 0;
-	SDL_UploadToGPUBuffer(pass, &src, &vr, false);
-	SDL_GPUBufferRegion ir{}; ir.buffer = mesh->indices; ir.offset = 0; ir.size = idxBytes;
-	src.offset = vertBytes;
-	SDL_UploadToGPUBuffer(pass, &src, &ir, false);
+	SDL_UploadToGPUBuffer(pass, &src, &vr, true);
+	SDL_GPUBufferRegion ir{}; ir.buffer = mesh->indices; ir.offset = idxDstOff; ir.size = idxBytes;
+	src.offset = alignedVertBytes;
+	SDL_UploadToGPUBuffer(pass, &src, &ir, true);
 	SDL_EndGPUCopyPass(pass);
 	bool ok = SDL_SubmitGPUCommandBuffer(cmds);
-	SDL_ReleaseGPUTransferBuffer(dev, buf);
+	ReleaseUploadTransferBuffer(dev, buf);
 	return ok;
+}
+
+bool UploadMesh(SDL_GPUDevice* dev, GpuMesh* mesh, const void* vertData, unsigned vertBytes, const void* idxData, unsigned idxBytes) {
+	return UploadMeshRange(dev, mesh, vertData, 0, vertBytes, idxData, 0, idxBytes);
 }
 
 void ReleaseMesh(SDL_GPUDevice* dev, GpuMesh* mesh) {

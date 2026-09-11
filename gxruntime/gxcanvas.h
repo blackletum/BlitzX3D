@@ -52,6 +52,7 @@ public:
 	bool clip(RECT* d)          const;
 	bool clip(RECT* d, RECT* s) const;
 	void damage(const RECT& r)  const;
+	void damageScene(const RECT& r) const;
 
 	void set2DEffect(gxEffect* effect);
 	gxEffect* get2DEffect() const;

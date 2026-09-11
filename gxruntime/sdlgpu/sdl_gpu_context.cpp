@@ -84,40 +84,22 @@ void SetCursorVisible(bool vis) {
 
 SDL_GPUDevice* CreateGPUDevice() {
 	SDL_PropertiesID props = SDL_CreateProperties();
-	if (props) {
-		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
-		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
-#ifdef _DEBUG
-		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
-#else
-		SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
-#endif
-		SDL_GPUDevice* dev = SDL_CreateGPUDeviceWithProperties(props);
-		SDL_DestroyProperties(props);
-		if (!dev) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDeviceWithProperties failed: %s", SDL_GetError());
-		}
-		if (dev) {
-			if (!SDL_SetGPUAllowedFramesInFlight(dev, 3)) {
-				SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetGPUAllowedFramesInFlight(3) failed: %s", SDL_GetError());
-			}
-			return dev;
-		}
+	if (!props) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateProperties failed: %s", SDL_GetError());
+		return nullptr;
 	}
-	SDL_GPUDevice* dev = SDL_CreateGPUDevice(
-		(SDL_GPUShaderFormat)(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL),
+	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
 #ifdef _DEBUG
-		true,
+	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
 #else
-		false,
+	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
 #endif
-		nullptr);
+	SDL_GPUDevice* dev = SDL_CreateGPUDeviceWithProperties(props);
+	SDL_DestroyProperties(props);
 	if (!dev) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDevice failed: %s", SDL_GetError());
-	} else {
-		if (!SDL_SetGPUAllowedFramesInFlight(dev, 3)) {
-			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_SetGPUAllowedFramesInFlight(3) failed: %s", SDL_GetError());
-		}
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDeviceWithProperties failed: %s", SDL_GetError());
+		return nullptr;
 	}
 	return dev;
 }

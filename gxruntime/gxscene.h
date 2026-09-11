@@ -167,6 +167,7 @@ private:
 
 	sdlgpu::GpuSceneFrame gpuFrame;
 	float gpuClearColor[3] = { 0, 0, 0 };
+	bool gpuOnlyFrame = true;
 
 	bool bumpNormalize = false;
 	float bumpUniformScale = 1.0f;

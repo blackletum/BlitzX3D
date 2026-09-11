@@ -1,6 +1,7 @@
 #include "sdl_gpu_scene.h"
 #include "sdl_gpu_mesh.h"
 #include "sdl_gpu_pipeline.h"
+#include "sdl_gpu_text.h"
 #include "sdl_gpu_texture.h"
 
 #include "../std.h"
@@ -14,27 +15,41 @@
 namespace sdlgpu {
 
 static void ReleaseTargetsLocked(SDL_GPUDevice* dev, GpuSceneFrame& frame) {
-	if (frame.colorTarget) { SDL_ReleaseGPUTexture(dev, frame.colorTarget); frame.colorTarget = nullptr; }
-	if (frame.depthTarget) { SDL_ReleaseGPUTexture(dev, frame.depthTarget); frame.depthTarget = nullptr; }
+	SDL_GPUDevice* relDev = frame.dev ? frame.dev : dev;
+	if (!relDev) return;
+	if (frame.colorTarget) { SDL_ReleaseGPUTexture(relDev, frame.colorTarget); frame.colorTarget = nullptr; }
+	if (frame.depthTarget) { SDL_ReleaseGPUTexture(relDev, frame.depthTarget); frame.depthTarget = nullptr; }
 	frame.width = frame.height = 0;
 	frame.optimClearR = frame.optimClearG = frame.optimClearB = 0.0f;
 	frame.optimClearA = 1.0f;
 }
 
 void ReleaseSceneTargets(SDL_GPUDevice* dev, GpuSceneFrame& frame) {
-	if (!dev) return;
-	ReleaseTargetsLocked(dev, frame);
+	SDL_GPUDevice* relDev = frame.dev ? frame.dev : dev;
+	if (!relDev) return;
+	ReleaseTargetsLocked(relDev, frame);
+	frame.dev = nullptr;
 }
 
 bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsigned h, float clearR, float clearG, float clearB) {
 	if (!dev || !w || !h) return false;
 
-	if (frame.dev != dev || frame.width != w || frame.height != h || !frame.colorTarget || !frame.depthTarget) {
-		ReleaseTargetsLocked(dev, frame);
+	if (frame.cmds && !frame.pass) {
+		SDL_GPUCommandBuffer* stale = frame.cmds;
+		frame.cmds = nullptr;
+		if (!SDL_SubmitGPUCommandBuffer(stale)) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Submit stale scene frame failed: %s", SDL_GetError());
+	}
+
+	bool clearChanged = frame.colorTarget && (frame.optimClearR != clearR || frame.optimClearG != clearG || frame.optimClearB != clearB || frame.optimClearA != 1.0f);
+	if (frame.dev != dev || frame.width != w || frame.height != h || !frame.colorTarget || !frame.depthTarget || clearChanged) {
+		SDL_GPUDevice* relDev = frame.dev ? frame.dev : dev;
+		ReleaseTargetsLocked(relDev, frame);
+		frame.dev = nullptr;
 		frame.colorTarget = CreateColorTarget(dev, w, h, clearR, clearG, clearB, 1.0f);
 		frame.depthTarget = CreateDepthTarget(dev, w, h, MeshDepthFormat(dev), 1.0f, 0);
 		if (!frame.colorTarget || !frame.depthTarget) {
 			ReleaseTargetsLocked(dev, frame);
+			frame.dev = nullptr;
 			return false;
 		}
 		frame.dev = dev;
@@ -74,6 +89,9 @@ bool BeginSceneFrame(GpuSceneFrame& frame, SDL_GPUDevice* dev, unsigned w, unsig
 	vp.x = 0; vp.y = 0; vp.w = (float)w; vp.h = (float)h;
 	vp.min_depth = 0.0f; vp.max_depth = 1.0f;
 	SDL_SetGPUViewport(frame.pass, &vp);
+	SDL_Rect sc{};
+	sc.x = 0; sc.y = 0; sc.w = (int)w; sc.h = (int)h;
+	SDL_SetGPUScissor(frame.pass, &sc);
 	return true;
 }
 
@@ -94,20 +112,21 @@ void EndSceneFrame(GpuSceneFrame& frame) {
 		SDL_EndGPURenderPass(frame.pass);
 		frame.pass = nullptr;
 	}
-	if (frame.cmds) {
-		SDL_SubmitGPUCommandBuffer(frame.cmds);
-		frame.cmds = nullptr;
-	}
 }
 
 bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame) {
 	if (!dev || !win || !frame.colorTarget || !frame.width || !frame.height) return false;
-	if (frame.pass || frame.cmds) return false;
+	if (frame.pass) return false;
 
-	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
+	SDL_GPUCommandBuffer* cmds = frame.cmds;
+	frame.cmds = nullptr;
 	if (!cmds) {
-		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
-		return false;
+		cmds = SDL_AcquireGPUCommandBuffer(dev);
+		if (!cmds) {
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+			ClearPendingText();
+			return false;
+		}
 	}
 
 	SDL_GPUTexture* swap = nullptr;
@@ -115,10 +134,12 @@ bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
 		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 		SDL_CancelGPUCommandBuffer(cmds);
+		ClearPendingText();
 		return false;
 	}
 	if (!swap) {
 		if (!SDL_SubmitGPUCommandBuffer(cmds)) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Submit minimized frame failed: %s", SDL_GetError());
+		ClearPendingText();
 		return true;
 	}
 
@@ -135,28 +156,60 @@ bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame
 	blit.cycle = false;
 	SDL_BlitGPUTexture(cmds, &blit);
 
+	if (HasPendingText()) {
+		if (PreparePendingText(dev, cmds)) {
+			SDL_GPUColorTargetInfo ti{};
+			ti.texture = swap;
+			ti.load_op = SDL_GPU_LOADOP_LOAD;
+			ti.store_op = SDL_GPU_STOREOP_STORE;
+			SDL_GPURenderPass* tpass = SDL_BeginGPURenderPass(cmds, &ti, 1, nullptr);
+			if (tpass) {
+				SDL_GPUViewport vp{};
+				vp.x = 0; vp.y = 0; vp.w = (float)sw; vp.h = (float)sh;
+				vp.min_depth = 0.0f; vp.max_depth = 1.0f;
+				SDL_SetGPUViewport(tpass, &vp);
+				SDL_Rect sc{};
+				sc.x = 0; sc.y = 0; sc.w = (int)sw; sc.h = (int)sh;
+				SDL_SetGPUScissor(tpass, &sc);
+				DrawPendingText(dev, win, tpass);
+				SDL_EndGPURenderPass(tpass);
+			}
+		}
+		ClearPendingText();
+	}
+
 	return SDL_SubmitGPUCommandBuffer(cmds);
 }
 
 bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame, ::gxCanvas* canvas) {
 	if (!dev || !win) return false;
-	bool has3D = frame.colorTarget && frame.width && frame.height && !frame.pass && !frame.cmds;
+	bool has3D = frame.colorTarget && frame.width && frame.height && !frame.pass;
 	if (!has3D && !canvas) return false;
-	if (has3D && (frame.pass || frame.cmds)) return false;
+	if (frame.pass) return false;
 
-	SDL_GPUCommandBuffer* cmds = SDL_AcquireGPUCommandBuffer(dev);
+	SDL_GPUCommandBuffer* cmds = frame.cmds;
+	frame.cmds = nullptr;
 	if (!cmds) {
-		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
-		return false;
+		cmds = SDL_AcquireGPUCommandBuffer(dev);
+		if (!cmds) {
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_AcquireGPUCommandBuffer failed: %s", SDL_GetError());
+			ClearPendingText();
+			return false;
+		}
 	}
 	SDL_GPUTexture* swap = nullptr;
 	Uint32 sw = 0, sh = 0;
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &swap, &sw, &sh)) {
 		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 		SDL_CancelGPUCommandBuffer(cmds);
+		ClearPendingText();
 		return false;
 	}
-	if (!swap) { if (!SDL_SubmitGPUCommandBuffer(cmds)) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Submit minimized frame failed: %s", SDL_GetError()); return true; }
+	if (!swap) {
+		if (!SDL_SubmitGPUCommandBuffer(cmds)) SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Submit minimized frame failed: %s", SDL_GetError());
+		ClearPendingText();
+		return true;
+	}
 
 	if (has3D) {
 		SDL_GPUBlitInfo blit{};
@@ -174,7 +227,9 @@ bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& 
 	}
 
 	SDL_GPUTexture* canvasTex = canvas ? GetCanvasOverlayTexture(dev, canvas) : nullptr;
-	if (canvasTex) {
+	bool haveText = HasPendingText();
+	bool textReady = haveText && PreparePendingText(dev, cmds);
+	if (canvasTex || textReady || !has3D) {
 		SDL_GPUColorTargetInfo ci{};
 		ci.texture = swap;
 		ci.load_op = has3D ? SDL_GPU_LOADOP_LOAD : SDL_GPU_LOADOP_CLEAR;
@@ -186,18 +241,15 @@ bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& 
 			vp.x = 0; vp.y = 0; vp.w = (float)sw; vp.h = (float)sh;
 			vp.min_depth = 0.0f; vp.max_depth = 1.0f;
 			SDL_SetGPUViewport(pass, &vp);
-			DrawCanvasOverlay(dev, win, pass, canvasTex);
+			SDL_Rect sc{};
+			sc.x = 0; sc.y = 0; sc.w = (int)sw; sc.h = (int)sh;
+			SDL_SetGPUScissor(pass, &sc);
+				if (canvasTex) DrawCanvasOverlay(dev, win, pass, canvasTex);
+			if (textReady) DrawPendingText(dev, win, pass);
 			SDL_EndGPURenderPass(pass);
 		}
-	} else if (!has3D) {
-		SDL_GPUColorTargetInfo ci{};
-		ci.texture = swap;
-		ci.load_op = SDL_GPU_LOADOP_CLEAR;
-		ci.store_op = SDL_GPU_STOREOP_STORE;
-		ci.clear_color = SDL_FColor{0,0,0,1};
-		SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmds, &ci, 1, nullptr);
-		if (pass) SDL_EndGPURenderPass(pass);
 	}
+	if (haveText) ClearPendingText();
 
 	return SDL_SubmitGPUCommandBuffer(cmds);
 }

@@ -1,0 +1,37 @@
+#ifndef SDL_GPU_TEXT_H
+#define SDL_GPU_TEXT_H
+
+struct SDL_GPUDevice;
+struct SDL_Window;
+struct SDL_GPURenderPass;
+struct SDL_GPUCommandBuffer;
+struct SDL_GPUTexture;
+
+class gxCanvas;
+
+namespace sdlgpu {
+
+struct TextQuad {
+	float destX = 0.0f;
+	float destY = 0.0f;
+	float destW = 0.0f;
+	float destH = 0.0f;
+	float srcX = 0.0f;
+	float srcY = 0.0f;
+	float srcW = 0.0f;
+	float srcH = 0.0f;
+	unsigned color = 0xffffffff;
+};
+
+bool QueueTextQuads(SDL_GPUDevice* dev, ::gxCanvas* atlas, bool smooth, unsigned canvasW, unsigned canvasH, const TextQuad* quads, unsigned count);
+bool QueueTextSolid(SDL_GPUDevice* dev, unsigned canvasW, unsigned canvasH, float dx, float dy, float dw, float dh, unsigned color);
+bool HasPendingText();
+bool PreparePendingText(SDL_GPUDevice* dev, SDL_GPUCommandBuffer* cmds);
+void DrawPendingText(SDL_GPUDevice* dev, SDL_Window* win, SDL_GPURenderPass* pass);
+void ClearPendingText();
+void InvalidateTextAtlas(::gxCanvas* atlas);
+void TeardownText();
+
+}
+
+#endif

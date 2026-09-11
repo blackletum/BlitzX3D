@@ -5,6 +5,8 @@
 #include "gxgraphics.h"
 #include "gxutf8.h"
 #include "../bbruntime/bbsys.h"
+#include "sdlgpu/sdl_gpu_text.h"
+#include "sdlgpu/sdl_gpu_texture.h"
 
 #include <inttypes.h>
 #include <stdlib.h>
@@ -235,6 +237,101 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 		int uh = max(1, static_cast<int>(getUnderlineThickness()));
 		dest->rectBlend(x, uy, width, uh, color_argb);
 	}
+}
+
+bool gxFont::renderGPU(SDL_GPUDevice* dev, gxCanvas* dest, unsigned color_argb, int x, int y, const std::string& text) {
+	if (!dev || !dest) return false;
+	int cw = dest->getWidth();
+	int ch = dest->getHeight();
+	if (cw <= 0 || ch <= 0) return false;
+	int ox = 0, oy = 0;
+	dest->getOrigin(&ox, &oy);
+	int vx = 0, vy = 0, vw = 0, vh = 0;
+	dest->getViewport(&vx, &vy, &vw, &vh);
+	int baselineY = y - glyphRenderOffset + glyphRenderBaseline;
+	struct Pending {
+		int atlas;
+		float dx, dy, dw, dh;
+		float sx, sy, sw, sh;
+	};
+	std::vector<Pending> items;
+	items.reserve(text.size());
+	int t_x = 0;
+	for (int i = 0; i < (int)text.size(); ) {
+		int codepointLen = UTF8::measureCodepoint(text[i]);
+		int chr = UTF8::decodeCharacter(text.c_str(), i);
+		auto it = glyphData.find(chr);
+		if (it == glyphData.end()) {
+			renderAtlas(chr);
+			it = glyphData.find(chr);
+		}
+		if (it != glyphData.end()) {
+			const GlyphData& gd = it->second;
+			if (gd.atlasIndex >= 0 && gd.atlasIndex < (int)atlases.size() && atlases[gd.atlasIndex]) {
+				float gx = (float)(x + t_x - gd.drawOffset[0] + ox);
+				float gy = (float)(baselineY - gd.drawOffset[1] + oy);
+				float gw = (float)gd.srcRect[2];
+				float gh = (float)gd.srcRect[3];
+				float sx = (float)gd.srcRect[0];
+				float sy = (float)gd.srcRect[1];
+				float x0 = gx < (float)vx ? (float)vx : gx;
+				float y0 = gy < (float)vy ? (float)vy : gy;
+				float x1 = gx + gw > (float)(vx + vw) ? (float)(vx + vw) : gx + gw;
+				float y1 = gy + gh > (float)(vy + vh) ? (float)(vy + vh) : gy + gh;
+				if (x1 > x0 && y1 > y0 && gw > 0.0f && gh > 0.0f) {
+					float us = (x0 - gx) / gw * (float)gd.srcRect[2];
+					float vs = (y0 - gy) / gh * (float)gd.srcRect[3];
+					float ue = (x1 - gx) / gw * (float)gd.srcRect[2];
+					float ve = (y1 - gy) / gh * (float)gd.srcRect[3];
+					Pending p{};
+					p.atlas = gd.atlasIndex;
+					p.dx = x0;
+					p.dy = y0;
+					p.dw = x1 - x0;
+					p.dh = y1 - y0;
+					p.sx = sx + us;
+					p.sy = sy + vs;
+					p.sw = ue - us;
+					p.sh = ve - vs;
+					items.push_back(p);
+				}
+			}
+			t_x += gd.horizontalAdvance;
+		}
+		i += codepointLen;
+		if (codepointLen <= 0) break;
+	}
+	for (auto& p : items) {
+		if (p.atlas < 0 || p.atlas >= (int)atlases.size() || !atlases[p.atlas]) return false;
+		if (!sdlgpu::GetCanvasTexture(dev, atlases[p.atlas])) return false;
+	}
+	for (auto& p : items) {
+		sdlgpu::TextQuad q{};
+		q.destX = p.dx;
+		q.destY = p.dy;
+		q.destW = p.dw;
+		q.destH = p.dh;
+		q.srcX = p.sx;
+		q.srcY = p.sy;
+		q.srcW = p.sw;
+		q.srcH = p.sh;
+		q.color = color_argb;
+		if (!sdlgpu::QueueTextQuads(dev, atlases[p.atlas], smooth, (unsigned)cw, (unsigned)ch, &q, 1)) return false;
+	}
+	if (underlined) {
+		int width = stringWidth(text);
+		int uy = baselineY + static_cast<int>(getUnderlinePosition()) + oy;
+		int uh = max(1, static_cast<int>(getUnderlineThickness()));
+		int ux = x + ox;
+		float x0 = ux < vx ? (float)vx : (float)ux;
+		float y0 = uy < vy ? (float)vy : (float)uy;
+		float x1 = ux + width > vx + vw ? (float)(vx + vw) : (float)(ux + width);
+		float y1 = uy + uh > vy + vh ? (float)(vy + vh) : (float)(uy + uh);
+		if (x1 > x0 && y1 > y0) {
+			if (!sdlgpu::QueueTextSolid(dev, (unsigned)cw, (unsigned)ch, x0, y0, x1 - x0, y1 - y0, color_argb)) return false;
+		}
+	}
+	return true;
 }
 
 int gxFont::charWidth(int chr) {

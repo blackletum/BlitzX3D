@@ -21,6 +21,7 @@ struct GpuMesh;
 	int SceneColorFormat();
 	SDL_GPUTransferBuffer* AcquireUploadTransferBuffer(SDL_GPUDevice* dev, Uint32 size);
 	void ReleaseUploadTransferBuffer(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf);
+	void ClearTransferPool(SDL_GPUDevice* dev);
 
 	void TeardownPipelines();
 

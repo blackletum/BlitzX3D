@@ -41,7 +41,7 @@ public:
     bool dirty() const { return mesh_dirty; }
     bool isSkinned() const { return skinned; }
 
-    void render(int first_vert, int vert_cnt, int first_tri, int tri_cnt);
+    void render(int first_vert, int vert_cnt, int first_tri, int tri_cnt, bool skipDxDraw = false);
     void renderSkinned(int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt);
 
     void backup();
@@ -62,6 +62,33 @@ private:
     dxSkinVertex* locked_skin_verts;
     WORD* locked_indices;
 
+    int gpu_dirty_vmin, gpu_dirty_vmax;
+    int gpu_dirty_tmin, gpu_dirty_tmax;
+    bool gpu_uploaded;
+
+    void markVertDirty(int n) {
+        if (n < 0 || n >= max_verts) return;
+        if (gpu_dirty_vmin < 0) gpu_dirty_vmin = gpu_dirty_vmax = n;
+        else {
+            if (n < gpu_dirty_vmin) gpu_dirty_vmin = n;
+            if (n > gpu_dirty_vmax) gpu_dirty_vmax = n;
+        }
+    }
+    void markTriDirty(int n) {
+        if (n < 0 || n >= max_tris) return;
+        if (gpu_dirty_tmin < 0) gpu_dirty_tmin = gpu_dirty_tmax = n;
+        else {
+            if (n < gpu_dirty_tmin) gpu_dirty_tmin = n;
+            if (n > gpu_dirty_tmax) gpu_dirty_tmax = n;
+        }
+    }
+    void markGpuFullDirty() {
+        gpu_dirty_vmin = 0;
+        gpu_dirty_vmax = max_verts - 1;
+        gpu_dirty_tmin = 0;
+        gpu_dirty_tmax = max_tris - 1;
+    }
+
     sdlgpu::GpuMesh* gpuMirror = nullptr;
 
     /***** GX INTERFACE *****/
@@ -73,6 +100,7 @@ public:
 
     void setVertex(int n, const void* v) {
         memcpy(locked_verts + n, v, sizeof(dxVertex));
+        markVertDirty(n);
     }
     void setVertex(int n, const float coords[3], const float normal[3], const float tex_coords[2][2]) {
         dxVertex* t = locked_verts + n;
@@ -80,6 +108,7 @@ public:
         memcpy(t->normal, normal, 12);
         t->argb = 0xffffffff;
         memcpy(t->tex_coords, tex_coords, 16);
+        markVertDirty(n);
     }
     void setVertex(int n, const float coords[3], const float normal[3], unsigned argb, const float tex_coords[2][2]) {
         dxVertex* t = locked_verts + n;
@@ -87,6 +116,7 @@ public:
         memcpy(t->normal, normal, 12);
         t->argb = argb;
         memcpy(t->tex_coords, tex_coords, 16);
+        markVertDirty(n);
     }
     void setSkinVertex(int n, const float coords[3], const float normal[3], unsigned argb, const float tex_coords[2][2], const unsigned char bone_indices[4], const float bone_weights[4]) {
         dxSkinVertex* t = locked_skin_verts + n;
@@ -98,11 +128,13 @@ public:
             t->blend_indices[i] = (float)bone_indices[i];
             t->blend_weights[i] = bone_weights[i];
         }
+        markVertDirty(n);
     }
     void setTriangle(int n, int v0, int v1, int v2) {
         locked_indices[n * 3] = (WORD)v0;
         locked_indices[n * 3 + 1] = (WORD)v1;
         locked_indices[n * 3 + 2] = (WORD)v2;
+        markTriDirty(n);
     }
 };
 

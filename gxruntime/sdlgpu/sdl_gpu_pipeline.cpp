@@ -14,6 +14,7 @@
 
 #include "shaders/mesh_shaders.h"
 #include "shaders/canvas_shaders.h"
+#include "sdl_gpu_text.h"
 
 namespace sdlgpu {
 
@@ -25,6 +26,7 @@ namespace sdlgpu {
 	}
 
 	static void TeardownBlit();
+	void ClearTransferPool(SDL_GPUDevice* dev);
 
 	static SDL_GPUShader* LoadShader(SDL_GPUDevice* dev, SDL_GPUShaderFormat fmt, SDL_GPUShaderStage stage, const char* entry, const uint8_t* code, size_t size, unsigned samplers = 0, unsigned uniformBuffers = 0) {
 		SDL_GPUShaderCreateInfo info{};
@@ -80,6 +82,7 @@ namespace sdlgpu {
 		if (!cmds) return false;
 
 		SDL_GPUTransferBuffer* buf = nullptr;
+		bool didUpload = false;
 		if (px) {
 			Uint32 size = w * h * 4;
 			buf = AcquireUploadTransferBuffer(dev, size);
@@ -105,7 +108,7 @@ namespace sdlgpu {
 			reg.d = 1;
 			SDL_UploadToGPUTexture(copy, &src, &reg, true);
 			SDL_EndGPUCopyPass(copy);
-			g_blitHasData = true;
+			didUpload = true;
 		}
 
 		SDL_GPUTexture* tex = nullptr;
@@ -113,11 +116,12 @@ namespace sdlgpu {
 		if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmds, win, &tex, &sw, &sh)) {
 			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
 			SDL_CancelGPUCommandBuffer(cmds);
-			if (buf) SDL_ReleaseGPUTransferBuffer(dev, buf);
+			if (buf) ReleaseUploadTransferBuffer(dev, buf);
 			return false;
 		}
+		bool haveData = g_blitHasData || didUpload;
 		if (tex) {
-			if (g_blitHasData) {
+			if (haveData) {
 				SDL_GPUBlitInfo blit{};
 				blit.source.texture = g_blitTex;
 				blit.source.w = w;
@@ -143,7 +147,8 @@ namespace sdlgpu {
 			}
 		}
 		bool ok = SDL_SubmitGPUCommandBuffer(cmds);
-		if (buf) SDL_ReleaseGPUTransferBuffer(dev, buf);
+		if (buf) ReleaseUploadTransferBuffer(dev, buf);
+		if (ok && didUpload) g_blitHasData = true;
 		return ok;
 	}
 
@@ -172,11 +177,6 @@ namespace sdlgpu {
 		SDL_GPUBuffer* g_canvasVB = nullptr;
 		SDL_GPUTextureFormat g_canvasFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
 
-		SDL_GPURenderPass* g_lastMeshPass = nullptr;
-		SDL_GPUGraphicsPipeline* g_lastMeshPipe = nullptr;
-		SDL_GPURenderPass* g_lastCanvasPass = nullptr;
-		SDL_GPUGraphicsPipeline* g_lastCanvasPipe = nullptr;
-
 	}
 
 	static void TeardownMeshPipe() {
@@ -185,8 +185,6 @@ namespace sdlgpu {
 		if (g_meshSamp && g_meshDev) SDL_ReleaseGPUSampler(g_meshDev, g_meshSamp);
 		g_meshSamp = nullptr;
 		g_meshDev = nullptr;
-		g_lastMeshPass = nullptr;
-		g_lastMeshPipe = nullptr;
 	}
 
 	static void TeardownCanvas() {
@@ -198,8 +196,6 @@ namespace sdlgpu {
 		g_canvasSamp = nullptr;
 		g_canvasDev = nullptr;
 		g_canvasFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
-		g_lastCanvasPass = nullptr;
-		g_lastCanvasPipe = nullptr;
 	}
 
 	static bool EnsureCanvasVertices(SDL_GPUDevice* dev);
@@ -250,7 +246,7 @@ namespace sdlgpu {
 		unsigned char white[4] = { 255, 255, 255, 255 };
 		SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, 4);
 		if (!buf) { SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
-		void* dst = SDL_MapGPUTransferBuffer(dev, buf, false);
+		void* dst = SDL_MapGPUTransferBuffer(dev, buf, true);
 		if (!dst) { ReleaseUploadTransferBuffer(dev, buf); SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 		memcpy(dst, white, 4);
 		SDL_UnmapGPUTransferBuffer(dev, buf);
@@ -267,7 +263,7 @@ namespace sdlgpu {
 		reg.w = 1;
 		reg.h = 1;
 		reg.d = 1;
-		SDL_UploadToGPUTexture(copy, &src, &reg, false);
+		SDL_UploadToGPUTexture(copy, &src, &reg, true);
 		SDL_EndGPUCopyPass(copy);
 		bool ok = SDL_SubmitGPUCommandBuffer(cmds);
 		ReleaseUploadTransferBuffer(dev, buf);
@@ -303,13 +299,18 @@ namespace sdlgpu {
 			vsCode = kMeshVS_DXIL; vsSize = kMeshVS_DXIL_size;
 			psCode = kMeshPS_DXIL; psSize = kMeshPS_DXIL_size;
 		}
-		if (useFmt == SDL_GPU_SHADERFORMAT_INVALID) return nullptr;
+		if (useFmt == SDL_GPU_SHADERFORMAT_INVALID) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No supported mesh shader format: %u", (unsigned)supported);
+			return nullptr;
+		}
 
 		SDL_GPUShader* vs = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_VERTEX, "VSMain", vsCode, vsSize, 0, 1);
 		if (!vs) return nullptr;
 		SDL_GPUShader* ps = LoadShader(dev, useFmt, SDL_GPU_SHADERSTAGE_FRAGMENT, "PSMain", psCode, psSize, 1, 0);
 		if (!ps) { SDL_ReleaseGPUShader(dev, vs); return nullptr; }
 
+		static_assert(sizeof(float) * 3 == 12, "layout");
+		static_assert(sizeof(unsigned) == 4, "layout");
 		SDL_GPUVertexBufferDescription vb{};
 		vb.slot = 0;
 		vb.pitch = stride;
@@ -344,12 +345,21 @@ namespace sdlgpu {
 		info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 		info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
 		info.rasterizer_state.cull_mode = cullMode;
+		info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_CLOCKWISE;
+		info.rasterizer_state.enable_depth_clip = true;
+		info.rasterizer_state.enable_depth_bias = false;
+		info.rasterizer_state.depth_bias_constant_factor = 0.0f;
+		info.rasterizer_state.depth_bias_clamp = 0.0f;
+		info.rasterizer_state.depth_bias_slope_factor = 0.0f;
 		info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+		info.multisample_state.sample_mask = 0;
 
 		info.depth_stencil_state.enable_depth_test = true;
-		info.depth_stencil_state.enable_depth_write = true;
+		info.depth_stencil_state.enable_depth_write = !alphaBlend;
 		info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
 		info.depth_stencil_state.enable_stencil_test = false;
+		info.depth_stencil_state.back_stencil_state.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
+		info.depth_stencil_state.front_stencil_state.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
 
 		info.target_info.num_color_targets = 1;
 		info.target_info.color_target_descriptions = &target;
@@ -359,7 +369,15 @@ namespace sdlgpu {
 		SDL_GPUGraphicsPipeline* newPipe = SDL_CreateGPUGraphicsPipeline(dev, &info);
 		SDL_ReleaseGPUShader(dev, vs);
 		SDL_ReleaseGPUShader(dev, ps);
-		if (!newPipe) return nullptr;
+		if (!newPipe) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUGraphicsPipeline mesh failed: %s", SDL_GetError());
+			return nullptr;
+		}
+		if (g_meshPipes.size() >= 8) {
+			SDL_GPUGraphicsPipeline* old = g_meshPipes.front().pipe;
+			if (old) SDL_ReleaseGPUGraphicsPipeline(dev, old);
+			g_meshPipes.erase(g_meshPipes.begin());
+		}
 
 		if (!g_meshSamp) {
 			SDL_GPUSamplerCreateInfo samp{};
@@ -395,9 +413,7 @@ namespace sdlgpu {
 			if (!boundTex) return;
 		}
 
-		// someone didnt cook here....
 		SDL_BindGPUGraphicsPipeline(pass, meshPipe);
-		g_lastMeshPass = pass; g_lastMeshPipe = meshPipe;
 		SDL_PushGPUVertexUniformData(cmds, 0, uniforms, uniformBytes);
 		SDL_GPUBufferBinding vb{};
 		vb.buffer = mesh->verts;
@@ -420,11 +436,17 @@ namespace sdlgpu {
 		SDL_GPUShaderFormat use = SDL_GPU_SHADERFORMAT_INVALID;
 		if (sup & SDL_GPU_SHADERFORMAT_SPIRV) { use = SDL_GPU_SHADERFORMAT_SPIRV; vsCode = kCanvasVS_SPIRV; vsSize = kCanvasVS_SPIRV_size; psCode = kCanvasPS_SPIRV; psSize = kCanvasPS_SPIRV_size; }
 		else if (sup & SDL_GPU_SHADERFORMAT_DXIL) { use = SDL_GPU_SHADERFORMAT_DXIL; vsCode = kCanvasVS_DXIL; vsSize = kCanvasVS_DXIL_size; psCode = kCanvasPS_DXIL; psSize = kCanvasPS_DXIL_size; }
-		if (use == SDL_GPU_SHADERFORMAT_INVALID) return false;
+		if (use == SDL_GPU_SHADERFORMAT_INVALID) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No supported canvas shader format: %u", (unsigned)sup);
+			return false;
+		}
 		SDL_GPUShader* vs = LoadShader(dev, use, SDL_GPU_SHADERSTAGE_VERTEX, "VSMain", vsCode, vsSize, 0, 0);
-		if (!vs) return false;
+		if (!vs) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Canvas VS failed: %s", SDL_GetError());
+			return false;
+		}
 		SDL_GPUShader* ps = LoadShader(dev, use, SDL_GPU_SHADERSTAGE_FRAGMENT, "PSMain", psCode, psSize, 1, 0);
-		if (!ps) { SDL_ReleaseGPUShader(dev, vs); return false; }
+		if (!ps) { SDL_ReleaseGPUShader(dev, vs); SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Canvas PS failed: %s", SDL_GetError()); return false; }
 		SDL_GPUVertexBufferDescription vb{}; vb.slot = 0; vb.pitch = 16; vb.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
 		SDL_GPUVertexAttribute attrs[2]{};
 		attrs[0].location = 0; attrs[0].buffer_slot = 0; attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2; attrs[0].offset = 0;
@@ -434,16 +456,25 @@ namespace sdlgpu {
 		tgt.blend_state.enable_blend = true;
 		tgt.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA; tgt.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA; tgt.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
 		tgt.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE; tgt.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA; tgt.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-		tgt.blend_state.enable_blend = true;
 		SDL_GPUGraphicsPipelineCreateInfo info{}; info.vertex_shader = vs; info.fragment_shader = ps; info.vertex_input_state = vin;
 		info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 		info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL; info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+		info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+		info.rasterizer_state.enable_depth_clip = true;
+		info.rasterizer_state.enable_depth_bias = false;
 		info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+		info.multisample_state.sample_mask = 0;
 		info.depth_stencil_state.enable_depth_test = false; info.depth_stencil_state.enable_depth_write = false;
+		info.depth_stencil_state.enable_stencil_test = false;
+		info.depth_stencil_state.back_stencil_state.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
+		info.depth_stencil_state.front_stencil_state.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
 		info.target_info.num_color_targets = 1; info.target_info.color_target_descriptions = &tgt; info.target_info.has_depth_stencil_target = false;
 		g_canvasPipe = SDL_CreateGPUGraphicsPipeline(dev, &info);
 		SDL_ReleaseGPUShader(dev, vs); SDL_ReleaseGPUShader(dev, ps);
-		if (!g_canvasPipe) return false;
+		if (!g_canvasPipe) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Canvas pipeline failed: %s", SDL_GetError());
+			return false;
+		}
 		SDL_GPUSamplerCreateInfo samp{}; samp.min_filter = SDL_GPU_FILTER_NEAREST; samp.mag_filter = SDL_GPU_FILTER_NEAREST; samp.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE; samp.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
 		g_canvasSamp = SDL_CreateGPUSampler(dev, &samp);
 		if (!g_canvasSamp) { TeardownCanvas(); return false; }
@@ -461,17 +492,17 @@ namespace sdlgpu {
 		if (!g_canvasVB) return false;
 		SDL_GPUTransferBuffer* tb = AcquireUploadTransferBuffer(dev, sizeof(verts));
 		if (!tb) { SDL_ReleaseGPUBuffer(dev, g_canvasVB); g_canvasVB = nullptr; return false; }
-		void* dst = SDL_MapGPUTransferBuffer(dev, tb, false);
+		void* dst = SDL_MapGPUTransferBuffer(dev, tb, true);
 		if (!dst) { ReleaseUploadTransferBuffer(dev, tb); SDL_ReleaseGPUBuffer(dev, g_canvasVB); g_canvasVB = nullptr; return false; }
 		memcpy(dst, verts, sizeof(verts)); SDL_UnmapGPUTransferBuffer(dev, tb);
 		SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(dev); if (!cb) { ReleaseUploadTransferBuffer(dev, tb); SDL_ReleaseGPUBuffer(dev, g_canvasVB); g_canvasVB = nullptr; return false; }
 		SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
 		SDL_GPUTransferBufferLocation src{}; src.transfer_buffer = tb;
 		SDL_GPUBufferRegion reg{}; reg.buffer = g_canvasVB; reg.size = sizeof(verts);
-		SDL_UploadToGPUBuffer(cp, &src, &reg, false);
+		SDL_UploadToGPUBuffer(cp, &src, &reg, true);
 		SDL_EndGPUCopyPass(cp);
 		bool ok = SDL_SubmitGPUCommandBuffer(cb);
-		SDL_ReleaseGPUTransferBuffer(dev, tb);
+		ReleaseUploadTransferBuffer(dev, tb);
 		if (!ok) { SDL_ReleaseGPUBuffer(dev, g_canvasVB); g_canvasVB = nullptr; return false; }
 		return true;
 	}
@@ -483,7 +514,6 @@ namespace sdlgpu {
 		if (!EnsureCanvasVertices(dev)) return;
 		if (!g_canvasPipe || !g_canvasVB || !g_canvasSamp) return;
 		SDL_BindGPUGraphicsPipeline(pass, g_canvasPipe);
-		g_lastCanvasPass = pass; g_lastCanvasPipe = g_canvasPipe;
 		SDL_GPUBufferBinding vb{}; vb.buffer = g_canvasVB; SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
 		SDL_GPUTextureSamplerBinding b{}; b.texture = tex; b.sampler = g_canvasSamp;
 		SDL_BindGPUFragmentSamplers(pass, 0, &b, 1);
@@ -495,19 +525,66 @@ namespace sdlgpu {
 		TeardownMeshPipe();
 		TeardownCanvas();
 		TeardownWhiteTexture();
-		g_lastMeshPass = nullptr; g_lastMeshPipe = nullptr;
-		g_lastCanvasPass = nullptr; g_lastCanvasPipe = nullptr;
+		TeardownText();
+		ClearTransferPool(nullptr);
+	}
+
+	namespace {
+		struct PooledEntry {
+			SDL_GPUDevice* dev = nullptr;
+			SDL_GPUTransferBuffer* buf = nullptr;
+			Uint32 size = 0;
+		};
+		std::vector<PooledEntry> g_transferPool;
+		std::unordered_map<SDL_GPUTransferBuffer*, PooledEntry> g_transferSizes;
+	}
+
+	void ClearTransferPool(SDL_GPUDevice* dev) {
+		for (auto it = g_transferPool.begin(); it != g_transferPool.end(); ) {
+			if (!dev || it->dev == dev) {
+				SDL_ReleaseGPUTransferBuffer(it->dev, it->buf);
+				g_transferSizes.erase(it->buf);
+				it = g_transferPool.erase(it);
+			} else ++it;
+		}
+		if (!dev) {
+			g_transferPool.clear();
+			g_transferSizes.clear();
+		}
 	}
 
 	SDL_GPUTransferBuffer* AcquireUploadTransferBuffer(SDL_GPUDevice* dev, Uint32 size) {
+		if (!dev || !size) return nullptr;
+		for (auto it = g_transferPool.begin(); it != g_transferPool.end(); ++it) {
+			if (it->dev == dev && it->size >= size) {
+				SDL_GPUTransferBuffer* buf = it->buf;
+				g_transferPool.erase(it);
+				return buf;
+			}
+		}
 		SDL_GPUTransferBufferCreateInfo ci{};
 		ci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 		ci.size = size;
-		return SDL_CreateGPUTransferBuffer(dev, &ci);
+		SDL_GPUTransferBuffer* buf = SDL_CreateGPUTransferBuffer(dev, &ci);
+		if (buf) g_transferSizes[buf] = PooledEntry{ dev, buf, size };
+		return buf;
 	}
 	void ReleaseUploadTransferBuffer(SDL_GPUDevice* dev, SDL_GPUTransferBuffer* buf) {
 		if (!dev || !buf) return;
-		SDL_ReleaseGPUTransferBuffer(dev, buf);
+		auto sit = g_transferSizes.find(buf);
+		Uint32 size = (sit != g_transferSizes.end() && sit->second.dev == dev) ? sit->second.size : 0;
+		if (!size) {
+			SDL_ReleaseGPUTransferBuffer(dev, buf);
+			return;
+		}
+		if (g_transferPool.size() >= 8) {
+			SDL_GPUTransferBuffer* old = g_transferPool.front().buf;
+			SDL_GPUDevice* oldDev = g_transferPool.front().dev;
+			SDL_ReleaseGPUTransferBuffer(oldDev, old);
+			g_transferSizes.erase(old);
+			g_transferPool.erase(g_transferPool.begin());
+		}
+		g_transferPool.push_back(PooledEntry{ dev, buf, size });
 	}
 
 }

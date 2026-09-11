@@ -4,6 +4,9 @@
 #include "gxruntime.h"
 #include "asmcoder.h"
 #include "gxutf8.h"
+#include "sdlgpu/sdl_gpu_texture.h"
+#include "sdlgpu/sdl_gpu_text.h"
+#include <SDL3/SDL_log.h>
 
 static int canvas_cnt;
 
@@ -260,6 +263,8 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
 }
 
 gxCanvas::~gxCanvas() {
+    sdlgpu::InvalidateCanvasTextures(this);
+    sdlgpu::InvalidateTextAtlas(this);
     delete[] cm_mask;
     if (locked_cnt) surf->UnlockRect();
     if (t_surf) t_surf->Release();
@@ -445,6 +450,10 @@ void gxCanvas::releaseZBuffer() {
 
 void gxCanvas::damage(const RECT& r) const {
     ++mod_cnt;
+    if (cm_mask) updateBitMask(r);
+}
+
+void gxCanvas::damageScene(const RECT& r) const {
     if (cm_mask) updateBitMask(r);
 }
 
@@ -1391,9 +1400,20 @@ void gxCanvas::text(int x, int y, const std::string& t) {
         e += UTF8::measureCodepoint(t[e]);
     }
     if (e > b) {
-        beginBlitBatch();
-        font->render(this, color_argb, x, y, t.substr(b, e - b));
-        endBlitBatch();
+        bool gpuAttempted = graphics && graphics->runtime && graphics->runtime->sdlGpu && font && this == graphics->getBackCanvas();
+        bool gpuText = gpuAttempted && font->renderGPU(graphics->runtime->sdlGpu, this, color_argb, x, y, t.substr(b, e - b));
+        if (!gpuText) {
+            if (gpuAttempted) {
+                static bool logged = false;
+                if (!logged) {
+                    logged = true;
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL GPU text queue failed, falling back to CPU text");
+                }
+            }
+            beginBlitBatch();
+            font->render(this, color_argb, x, y, t.substr(b, e - b));
+            endBlitBatch();
+        }
     }
 }
 

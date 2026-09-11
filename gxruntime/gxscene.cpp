@@ -814,6 +814,7 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	setRS(D3DRS_FILLMODE, wireframe ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
 	setRS(D3DRS_MULTISAMPLEANTIALIAS, antialias ? TRUE : FALSE);
 
+	gpuOnlyFrame = true;
 	if (graphics && graphics->runtime && graphics->runtime->sdlGpu) {
 		unsigned gw = (unsigned)viewport.Width;
 		unsigned gh = (unsigned)viewport.Height;
@@ -836,6 +837,7 @@ void gxScene::clear(const float rgb[3], float alpha, float z, bool clear_argb, b
 }
 
 void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+	bool drewGpu = false;
 	if (gpuFrame.active() && mesh && !mesh->isSkinned() && mesh->getGpuMirror()) {
 		bool skipGpu = false;
 		if (graphics && graphics->runtime && graphics->runtime->sdlWindow) {
@@ -857,17 +859,20 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 				if (fx & FX_DOUBLESIDED) cull = SDL_GPU_CULLMODE_NONE;
 				else if (flipped) cull = SDL_GPU_CULLMODE_FRONT;
 				sdlgpu::RenderSceneMesh(gpuFrame, mesh->getGpuMirror(), uniforms, tex, first_vert, vert_cnt, first_tri, tri_cnt, alphaBlend, cull);
+				drewGpu = true;
 			}
 		}
 	}
+	if (!drewGpu) gpuOnlyFrame = false;
 
 	if (currentEffect) {
+		gpuOnlyFrame = false;
 		UINT passes;
 		if (currentEffect->begin(&passes)) {
 			currentEffect->setAutoMatrices(currentWorld, currentView, currentProj);
 			for (UINT p = 0; p < passes; ++p) {
 				if (currentEffect->beginPass(p)) {
-					mesh->render(first_vert, vert_cnt, first_tri, tri_cnt);
+					mesh->render(first_vert, vert_cnt, first_tri, tri_cnt, false);
 					currentEffect->endPass();
 				}
 			}
@@ -877,7 +882,9 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 		return;
 	}
 
-	mesh->render(first_vert, vert_cnt, first_tri, tri_cnt);
+	bool extraTex = (n_texs > tex_stages);
+	if (extraTex || wireframe) gpuOnlyFrame = false;
+	mesh->render(first_vert, vert_cnt, first_tri, tri_cnt, drewGpu && !extraTex && !wireframe);
 	tris_drawn += tri_cnt;
 	if(n_texs <= tex_stages) return;
 
@@ -1038,6 +1045,7 @@ void gxScene::setSkinShaderConstants() {
 }
 
 void gxScene::renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt) {
+	gpuOnlyFrame = false;
 	setSkinShaderConstants();
 	mesh->renderSkinned(first_vert, vert_cnt, first_tri, tri_cnt, bone_data, bone_cnt);
 	tris_drawn += tri_cnt;
@@ -1046,7 +1054,8 @@ void gxScene::renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int firs
 void gxScene::end() {
 	dir3dDev->EndScene();
 	RECT r = { (LONG)viewport.X, (LONG)viewport.Y, (LONG)(viewport.X + viewport.Width), (LONG)(viewport.Y + viewport.Height) };
-	target->damage(r);
+	if (graphics && graphics->runtime && graphics->runtime->sdlGpu && gpuOnlyFrame && gpuFrame.colorTarget) target->damageScene(r);
+	else target->damage(r);
 	sdlgpu::EndSceneFrame(gpuFrame);
 }
 

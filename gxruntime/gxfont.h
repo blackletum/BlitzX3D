@@ -10,6 +10,7 @@
 
 class gxCanvas;
 class gxGraphics;
+struct SDL_GPUDevice;
 
 // typedef IDirectDrawSurface7 ddSurf;
 
@@ -19,6 +20,7 @@ public:
 	~gxFont();
 
 	void render(gxCanvas* dest, unsigned color_argb, int x, int y, const std::string& t);
+	bool renderGPU(SDL_GPUDevice* dev, gxCanvas* dest, unsigned color_argb, int x, int y, const std::string& t);
 
 	int charWidth(int c);
 	int charAdvance(int c);
