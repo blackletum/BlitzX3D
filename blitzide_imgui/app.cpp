@@ -370,21 +370,41 @@ void App::shutdown() {
 void App::mainloop() {
 	while (!quitting) {
 		SDL_StartTextInput(window);
-		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			ImGui_ImplSDL3_ProcessEvent(&event);
-			if (event.type == SDL_EVENT_QUIT ||
-				(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))) requestQuit();
-			if (event.type == SDL_EVENT_DROP_FILE && event.drop.data) openPath(event.drop.data);
+			switch (event.type)
+			{
+			case SDL_EVENT_QUIT:
+			case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+		   		if (event.window.windowID == SDL_GetWindowID(window))
+					requestQuit();
+				break;
+			case SDL_EVENT_DROP_FILE:
+				if (event.drop.data)
+					openPath(event.drop.data);
+				break;
+			case SDL_EVENT_WINDOW_FOCUS_LOST:
+				focused = false;
+				break;
+			case SDL_EVENT_WINDOW_FOCUS_GAINED:
+				focused = true;
+				break;
+			default:
+				drawIde = true;
+				break;
+			}
 		}
 
-		const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
-		if (!focused) {
+		if (keywordsLoaded)
+			drawIde = true;
+
+		if (drawIde || focused)
+			frame();
+
+		if (focused)
 			SDL_WaitEventTimeout(nullptr, 16);
-			continue;
-		}
 
-		frame();
+		drawIde = false;
 	}
 }
 
@@ -870,7 +890,7 @@ void App::drawOutput() {
 
 	ImGui::PushStyleColor(ImGuiCol_Text, compileOK ? IM_COL32(200, 255, 200, 255) : IM_COL32(255, 200, 200, 255));
 	ImGui::InputTextMultiline("##output", (char*)outputView.c_str(), (int)outputView.capacity() + 1,
-		ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4),
+		ImVec2(ImGui::GetContentRegionAvail().x, -ImGui::GetFrameHeightWithSpacing() - 4),
 		ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_CallbackResize,
 		OutputTextResizeCallback, (void*)&outputView);
 	ImGui::PopStyleColor();
@@ -2013,6 +2033,7 @@ void App::compile(const std::vector<std::string>& args) {
 				appendOutput("Warning: could not apply icon to executable.\n");
 			}
 		}
+		drawIde = true;
 		compiling = false;
 	});
 }

@@ -1483,11 +1483,14 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 	else if(t == "tempdir") {
 		if(GetTempPath(MAX_PATH, buff)) return toDir(buff);
 	}
-	else if(t == "direct3d8") {
+	else if(t == "direct3d7" || t == "direct3d8" || t == "direct3d9" || t == "direct3d") {
 		if(graphics) return itoa((int)graphics->dir3d);
 	}
-	else if(t == "direct3ddevice8") {
+	else if(t == "direct3ddevice7" || t == "direct3ddevice8" || t == "direct3ddevice9" || t == "direct3ddevice") {
 		if(graphics) return itoa((int)graphics->dir3dDev);
+	}
+	else if(t == "directdraw7" || t == "directdraw" || t == "directdraw8") {
+		if(graphics) return itoa((int)graphics->dir3d);
 	}
 	else if(t == "directinput7") {
 		if(input) return itoa((int)input->dirInput);
