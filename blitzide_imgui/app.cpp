@@ -395,6 +395,9 @@ void App::mainloop() {
 			}
 		}
 
+		if (keywordsLoaded)
+			drawIde = true;
+
 		if (drawIde || focused)
 			frame();
 

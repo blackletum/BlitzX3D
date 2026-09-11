@@ -183,7 +183,7 @@ private:
 	bool aboutOpen = false;
 	bool quitting = false;
 	bool showExitPrompt = false;
-	bool focused = true;
+	bool focused = false;
 	bool drawIde = false;
 
 	SDL_Event event;
