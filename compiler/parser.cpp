@@ -60,11 +60,101 @@ void Parser::exp(const std::string& s) {
 }
 
 std::string Parser::parseIdent() {
+#ifdef XBETA
+	if (isSoftKeyword(toker->curr())) {
+		std::string t = tolower(toker->text());
+		toker->next();
+		return t;
+	}
+#endif
 	if (toker->curr() != IDENT) exp(MultiLang::identifier);
 	std::string t = toker->text();
 	toker->next();
 	return t;
 }
+
+#ifdef XBETA
+bool Parser::isSoftKeyword(int c) {
+	return c == DO || c == LOOP || c == WITH || c == IS || c == ISNOT;
+}
+
+StmtNode* Parser::parseIdentStatement(const std::string& ident, bool debug) {
+	std::string tag = parseTypeTag();
+	bool isFuncPtrCall = funcPtrIdents.count(ident) != 0 && toker->curr() == '('
+		&& arrayDecls.find(ident) == arrayDecls.end();
+	if (arrayDecls.find(ident) == arrayDecls.end()
+		&& toker->curr() != '=' && toker->curr() != '\\' && toker->curr() != '['
+		&& toker->curr() != PLUSEQ && toker->curr() != MINUSEQ
+		&& toker->curr() != STAREQ && toker->curr() != SLASHEQ
+		&& toker->curr() != AMPEQ
+		&& !isFuncPtrCall
+		) {
+		ExprSeqNode* exprs;
+		if (toker->curr() == '(') {
+			int nest = 1, k;
+			for (k = 1;; ++k) {
+				int c = toker->lookAhead(k);
+				if (isTerm(c)) ex(MultiLang::mismatched_brackets);
+				else if (c == '(') ++nest;
+				else if (c == ')' && !--nest) break;
+			}
+			if (isTerm(toker->lookAhead(++k))) {
+				toker->next();
+				exprs = parseExprSeq();
+				if (toker->curr() != ')') exp("')'");
+				toker->next();
+			}
+			else exprs = parseExprSeq();
+		}
+		else exprs = parseExprSeq();
+		if ((ident != "debuglog" && ident != "stop") || debug) {
+			CallNode* call = new CallNode(ident, tag, exprs);
+			return new ExprStmtNode(call);
+		}
+		return 0;
+	}
+	else if (isFuncPtrCall) {
+		toker->next();
+		std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
+		if (toker->curr() != ')') exp("')'");
+		toker->next();
+		VarNode* var = new IdentVarNode(ident, tag);
+		ExprNode* funcExpr = new VarExprNode(var);
+		CallIndirectNode* call = new CallIndirectNode(funcExpr, exprs.release());
+		return new ExprStmtNode(call);
+	}
+	else {
+		VarNode* var = parseVar(ident, tag);
+		return parseAssignment(var);
+	}
+}
+
+ExprNode* Parser::parsePrimaryIdent(const std::string& ident) {
+	std::string tag = parseTypeTag();
+	ExprNode* result = 0;
+	if (funcPtrIdents.count(ident) && toker->curr() == '(' && arrayDecls.find(ident) == arrayDecls.end()) {
+		toker->next();
+		std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
+		if (toker->curr() != ')') exp("')'");
+		toker->next();
+		VarNode* var = new IdentVarNode(ident, tag);
+		ExprNode* funcExpr = new VarExprNode(var);
+		result = new CallIndirectNode(funcExpr, exprs.release());
+	}
+	else if (toker->curr() == '(' && arrayDecls.find(ident) == arrayDecls.end()) {
+		toker->next();
+		std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
+		if (toker->curr() != ')') exp("')'");
+		toker->next();
+		result = new CallNode(ident, tag, exprs.release());
+	}
+	else {
+		VarNode* var = parseVar(ident, tag);
+		result = new VarExprNode(var);
+	}
+	return result;
+}
+#endif
 
 void Parser::parseChar(int c) {
 	if (toker->curr() != c) exp(std::string("'") + char(c) + std::string("'"));
@@ -121,19 +211,13 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 		case IDENT:
 		{
 			std::string ident = toker->text();
-			toker->next(); std::string tag = parseTypeTag();
+			toker->next();
 #ifdef XBETA
-			bool isFuncPtrCall = funcPtrIdents.count(ident) != 0 && toker->curr() == '('
-				&& arrayDecls.find(ident) == arrayDecls.end();
-#endif
+			result = parseIdentStatement(ident, debug);
+#else
+			std::string tag = parseTypeTag();
 			if (arrayDecls.find(ident) == arrayDecls.end()
 				&& toker->curr() != '=' && toker->curr() != '\\' && toker->curr() != '['
-#ifdef XBETA
-				&& toker->curr() != PLUSEQ && toker->curr() != MINUSEQ
-				&& toker->curr() != STAREQ && toker->curr() != SLASHEQ
-				&& toker->curr() != AMPEQ
-				&& !isFuncPtrCall
-#endif
 				) {
 				//must be a function
 				ExprSeqNode* exprs;
@@ -161,25 +245,37 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 				}
 				else { result = 0; }
 			}
-#ifdef XBETA
-			else if (isFuncPtrCall) {
-				toker->next();
-				std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
-				if (toker->curr() != ')') exp("')'");
-				toker->next();
-				VarNode* var = new IdentVarNode(ident, tag);
-				ExprNode* funcExpr = new VarExprNode(var);
-				CallIndirectNode* call = new CallIndirectNode(funcExpr, exprs.release());
-				result = new ExprStmtNode(call);
-			}
-#endif
 			else {
 				//must be a var
-				VarNode* var = parseVar(ident, tag);
-				result = parseAssignment(var);
+				std::unique_ptr<VarNode> var(parseVar(ident, tag));
+				if (toker->curr() != '=') exp(MultiLang::variable_assignment);
+				toker->next(); ExprNode* expr = parseExpr(false);
+				result = new AssNode(var.release(), expr);
 			}
+#endif
 		}
 		break;
+#ifdef XBETA
+		case IS:
+		case ISNOT:
+		{
+			std::string ident = tolower(toker->text());
+			toker->next();
+			result = parseIdentStatement(ident, debug);
+		}
+		break;
+		case LOOP:
+		{
+			int nxt = toker->lookAhead(1);
+			if (nxt == WHILE || nxt == UNTIL || nxt == ':' || nxt == '\n' || nxt == EOF) {
+				return;
+			}
+			std::string ident = tolower(toker->text());
+			toker->next();
+			result = parseIdentStatement(ident, debug);
+			break;
+		}
+#endif
 		case IF:
 		{
 			toker->next(); result = parseIf(debug);
@@ -328,10 +424,18 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 			} while (toker->curr() == ',');
 			break;
 		case RESTORE:
+#ifdef XBETA
+			if (toker->next() == IDENT || isSoftKeyword(toker->curr())) {
+				std::string label = toker->curr() == IDENT ? toker->text() : tolower(toker->text());
+				result = new RestoreNode(label); toker->next();
+			}
+			else result = new RestoreNode("");
+#else
 			if (toker->next() == IDENT) {
 				result = new RestoreNode(toker->text()); toker->next();
 			}
 			else result = new RestoreNode("");
+#endif
 			break;
 		case DATA:
 			if (scope != STMTS_PROG) ex(MultiLang::data_can_only_appear_in_main);
@@ -390,6 +494,13 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 #ifdef XBETA
 		case DO:
 		{
+			int nxt = toker->lookAhead(1);
+			if (nxt != WHILE && nxt != UNTIL && nxt != ':' && nxt != '\n' && nxt != EOF) {
+				std::string ident = tolower(toker->text());
+				toker->next();
+				result = parseIdentStatement(ident, debug);
+				break;
+			}
 			if (toker->next() == WHILE || toker->curr() == UNTIL) {
 				bool isUntil = (toker->curr() == UNTIL);
 				toker->next();
@@ -417,6 +528,16 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 
 		case WITH:
 		{
+			int nxt = toker->lookAhead(1);
+			if (nxt == '=' || nxt == PLUSEQ || nxt == MINUSEQ || nxt == STAREQ
+				|| nxt == SLASHEQ || nxt == AMPEQ || nxt == '(' || nxt == '['
+				|| nxt == '\\' || nxt == '%' || nxt == '#' || nxt == '$'
+				|| nxt == '@' || nxt == '.' || nxt == ':' || nxt == '\n' || nxt == EOF) {
+				std::string ident = tolower(toker->text());
+				toker->next();
+				result = parseIdentStatement(ident, debug);
+				break;
+			}
 			toker->next();
 			ExprNode* objExpr = parseExpr(false);
 			DeclVarNode* tempVar = new DeclVarNode();
@@ -436,15 +557,14 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 			if (!withStack.empty()) {
 				std::string fieldIdent = parseIdent();
 				std::string fieldTag = parseTypeTag();
-				DeclVarNode* tempNode = withStack.back();
-				VarExprNode* base = new VarExprNode(tempNode);
-				FieldVarNode* fvn = new FieldVarNode(base, fieldIdent, fieldTag);
 				if (toker->curr() == '=' || toker->curr() == PLUSEQ || toker->curr() == MINUSEQ || toker->curr() == STAREQ || toker->curr() == SLASHEQ || toker->curr() == AMPEQ) {
+					DeclVarNode* tempNode = withStack.back();
+					VarExprNode* base = new VarExprNode(tempNode);
+					FieldVarNode* fvn = new FieldVarNode(base, fieldIdent, fieldTag);
 					result = parseAssignment(fvn);
+					break;
 				}
-				else {
-					result = new ExprStmtNode(new VarExprNode(fvn));
-				}
+				result = new LabelNode(fieldIdent, datas->size());
 				break;
 			}
 #endif
@@ -1017,19 +1137,11 @@ ExprNode* Parser::parsePrimary(bool opt) {
 		toker->next(); break;
 	case IDENT:
 		ident = toker->text();
-		toker->next(); tag = parseTypeTag();
+		toker->next();
 #ifdef XBETA
-		if (funcPtrIdents.count(ident) && toker->curr() == '(' && arrayDecls.find(ident) == arrayDecls.end()) {
-			toker->next();
-			std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
-			if (toker->curr() != ')') exp("')'");
-			toker->next();
-			VarNode* var = new IdentVarNode(ident, tag);
-			ExprNode* funcExpr = new VarExprNode(var);
-			result = new CallIndirectNode(funcExpr, exprs.release());
-			break;
-		}
-#endif
+		result = parsePrimaryIdent(ident);
+#else
+		tag = parseTypeTag();
 		if (toker->curr() == '(' && arrayDecls.find(ident) == arrayDecls.end()) {
 			//must be a func
 			toker->next();
@@ -1043,10 +1155,31 @@ ExprNode* Parser::parsePrimary(bool opt) {
 			VarNode* var = parseVar(ident, tag);
 			result = new VarExprNode(var);
 		}
+#endif
 		break;
+#ifdef XBETA
+	case DO:
+	case LOOP:
+	case WITH:
+	case IS:
+	case ISNOT:
+		ident = tolower(toker->text());
+		toker->next();
+		result = parsePrimaryIdent(ident);
+		break;
+#endif
 	case '%':
-		if (toker->next() == IDENT) {
+		if (toker->next() == IDENT
+#ifdef XBETA
+			|| isSoftKeyword(toker->curr())
+#endif
+			) {
+#ifdef XBETA
+			std::string fn = toker->curr() == IDENT ? toker->text() : tolower(toker->text());
+			result = new CallPtrNode(fn);
+#else
 			result = new CallPtrNode(toker->text());
+#endif
 			toker->next();
 			break;
 		}
