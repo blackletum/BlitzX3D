@@ -1039,6 +1039,11 @@ ExprNode* Parser::parseUniExpr(bool opt) {
 		result = parseUniExpr(false);
 		result = new AfterNode(result);
 		break;
+	case NOT:
+		toker->next();
+		result = parseUniExpr(false);
+		result = new RelExprNode('=', result, new IntConstNode(0));
+		break;
 	case '+':case '-':case '~':case ABS:case SGN:case POWTWO:
 		if (toker->lookAhead(-1) == c) { toker->next(); result = new IntConstNode(1); break; }
 		toker->next();
