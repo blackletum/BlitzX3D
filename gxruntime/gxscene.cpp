@@ -952,6 +952,16 @@ void gxScene::renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int firs
 }
 
 void gxScene::end() {
+	for (int s = 1; s < tex_stages; ++s) {
+		if (texstate[s].canvas) {
+			texstate[s].canvas = 0;
+		}
+		setTSS(s, D3DTSS_COLOROP, D3DTOP_DISABLE);
+		setTSS(s, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+		setTex(s, nullptr);
+	}
+	n_texs = n_texs > 1 ? 1 : n_texs;
+	lastRenderStateValid = false;
 	dir3dDev->EndScene();
 	RECT r = { (LONG)viewport.X, (LONG)viewport.Y, (LONG)(viewport.X + viewport.Width), (LONG)(viewport.Y + viewport.Height) };
 	target->damage(r);
