@@ -32,7 +32,7 @@ void ProgNode::translate(Codegen* g, const std::vector<UserFunc>& usrfuncs) {
 
 	int k;
 
-	if(g->debug) g->s_data(stmts->file, file_lab);
+	g->s_data(stmts->file, file_lab);
 
 	//enumerate locals
 	int size = enumVars(sem_env);
@@ -59,6 +59,11 @@ void ProgNode::translate(Codegen* g, const std::vector<UserFunc>& usrfuncs) {
 		g->s_data("<main program>", t);
 		g->code(call("__bbDebugEnter", local(0), iconst((int)sem_env), global(t)));
 	}
+	else {
+		std::string t = genLabel();
+		g->s_data("<main program>", t);
+		g->code(call("__bbReleaseEnter", global(t)));
+	}
 
 	//no user funcs used!
 	usedfuncs.clear();
@@ -78,6 +83,7 @@ void ProgNode::translate(Codegen* g, const std::vector<UserFunc>& usrfuncs) {
 	g->label(sem_env->funcLabel + "_leave");
 	t = deleteVars(sem_env);
 	if(g->debug) t = new TNode(IR_SEQ, call("__bbDebugLeave"), t);
+	else t = new TNode(IR_SEQ, call("__bbReleaseLeave"), t);
 	g->leave(t, 0);
 
 	//structs
