@@ -20,7 +20,11 @@
 #include "../compiler/environ.h"
 #include "../compiler/parser.h"
 #include "../compiler/assem_x86/assem_x86.h"
+#ifdef LLVM_BACKEND
+#include "../compiler/codegen_llvm/codegen_llvm.h"
+#else
 #include "../compiler/codegen_x86/codegen_x86.h"
+#endif
 #include "../bbruntime_dll/bbruntime_dll.h"
 
 #undef environ
@@ -292,7 +296,11 @@ int _cdecl main(int argc, char* argv[]) {
 		if (!veryquiet) std::cout << "Translating..." << std::endl;
 		qstreambuf qbuf;
 		std::iostream asmcode(&qbuf);
+#ifdef LLVM_BACKEND
+		Codegen_llvm codegen(asmcode, debug);
+#else
 		Codegen_x86 codegen(asmcode, debug);
+#endif
 
 		prog->translate(&codegen, userFuncs);
 
