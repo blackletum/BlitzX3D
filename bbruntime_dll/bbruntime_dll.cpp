@@ -81,7 +81,11 @@ public:
 	virtual void debugLog(const char* msg) {}
 	virtual void debugMsg(const char* e, bool serious) {
 		if (serious) {
-			MessageBoxW(gx_runtime->hwnd, UTF8::convertToUtf16(e).c_str(), MultiLang::runtime_error, MB_APPLMODAL);
+			std::string full = bbReleaseCrashReport(e);
+			writeCrashLog("=== BLITZ RUNTIME ERROR ===");
+			writeCrashLog("%s", full.c_str());
+			writeCrashLog("---");
+			MessageBoxW(gx_runtime->hwnd, UTF8::convertToUtf16(full).c_str(), MultiLang::runtime_error, MB_APPLMODAL);
 		}
 	}
 	virtual void debugSys(void* msg) {}
@@ -191,6 +195,21 @@ static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 				strcat_s(hex, sizeof(hex), part);
 			}
 			writeCrashLog("Instruction bytes: %s", hex);
+		}
+		if (const char* bfile = bbReleaseFile()) {
+			if (bfile[0]) {
+				int pos = bbReleasePos();
+				int row = (pos >> 16) & 0xffff, col = pos & 0xffff;
+				writeCrashLog("Blitz location: %s (line %d, col %d)", bfile, row + 1, col + 1);
+			}
+		}
+		if (bbReleaseDepth() > 0) {
+			writeCrashLog("Blitz call stack (innermost first):");
+			for (int i = bbReleaseDepth() - 1; i >= 0; --i) {
+				const char* f = bbReleaseFuncAt(i);
+				if (!f || !f[0]) continue;
+				writeCrashLog("  %s", f);
+			}
 		}
 		writeCrashLog("---");
 

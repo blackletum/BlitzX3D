@@ -172,6 +172,11 @@ void FuncDeclNode::translate(Codegen* g) {
         g->s_data(ident, t);
         g->code(call("__bbDebugEnter", local(0), iconst((int)sem_env), global(t)));
     }
+    else {
+        std::string t = genLabel();
+        g->s_data(ident, t);
+        g->code(call("__bbReleaseEnter", global(t)));
+    }
 
     //translate statements
     stmts->translate(g);
@@ -184,6 +189,7 @@ void FuncDeclNode::translate(Codegen* g) {
     g->label(sem_env->funcLabel + "_leave");
     t = deleteVars(sem_env);
     if (g->debug) t = new TNode(IR_SEQ, call("__bbDebugLeave"), t);
+    else t = new TNode(IR_SEQ, call("__bbReleaseLeave"), t);
     g->leave(t, sem_type->params->size() * 4);
 }
 

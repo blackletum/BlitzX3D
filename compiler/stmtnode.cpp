@@ -10,6 +10,10 @@ void StmtNode::debug(int pos, Codegen* g) {
 		TNode* t = fileLabel.size() ? global(fileLabel) : iconst(0);
 		g->code(call("__bbDebugStmt", iconst(pos), t));
 	}
+	else {
+		TNode* t = fileLabel.size() ? global(fileLabel) : iconst(0);
+		g->code(call("__bbReleaseStmt", iconst(pos), t));
+	}
 }
 
 void StmtSeqNode::reset(const std::string& file, const std::string& lab) {
@@ -65,7 +69,7 @@ void IncludeNode::semant(Environ* e) {
 
 void IncludeNode::translate(Codegen* g) {
 
-	if(g->debug) g->s_data(file, label);
+	g->s_data(file, label);
 
 	stmts->translate(g);
 }
