@@ -9,10 +9,11 @@
 #include <mutex>
 #include <functional>
 
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_video.h>
+
 #include "prefs.h"
 #include "TextEditor.h"
-
-struct SDL_Window;
 
 struct Doc {
 	std::string path;
@@ -182,6 +183,10 @@ private:
 	bool aboutOpen = false;
 	bool quitting = false;
 	bool showExitPrompt = false;
+	bool focused = false;
+	bool drawIde = false;
+
+	SDL_Event event;
 };
 
 #endif
