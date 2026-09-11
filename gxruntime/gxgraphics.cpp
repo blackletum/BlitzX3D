@@ -350,7 +350,9 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 }
 
 bool gxGraphics::setDarkMode(bool mode) {
+	if (!runtime) return false;
 	HWND hwnd = runtime->hwnd;
+	if (!hwnd || !IsWindow(hwnd)) return false;
 
 	BOOL DARK_MODE = mode ? TRUE : FALSE;
 	if (DwmSetWindowAttribute(hwnd, 20, &DARK_MODE, sizeof(DARK_MODE)) != S_OK) return false;
@@ -468,7 +470,8 @@ gxCanvas* gxGraphics::createCanvasFromImage(void* fib32, int w, int h, int flags
 	if ((flags & gxCanvas::CANVAS_TEX_MASK) && !(flags & gxCanvas::CANVAS_TEX_ALPHA)) {
 		flags |= gxCanvas::CANVAS_TEX_ALPHA;
 	}
-	IDirect3DTexture9* tex = ddUtil::textureFromDecoded(fib32, w, h, flags, this, true, &w, &h);
+	bool vram = (flags & gxCanvas::CANVAS_TEX_VIDMEM) != 0;
+	IDirect3DTexture9* tex = ddUtil::textureFromDecoded(fib32, w, h, flags, this, vram, &w, &h);
 	if (!tex) return nullptr;
 	gxCanvas* c = new gxCanvas(this, tex, flags);
 	if (w > 0 && h > 0) c->setLogicalSize(w, h);

@@ -57,7 +57,9 @@ void bbSetErrorMsg(int pos, BBStr* str) {
 }
 
 BBStr* bbGetException() {
-    return new BBStr(std::format("{0}: {1}", errorfunc, errorlog));
+    std::string base = std::format("{0}: {1}", errorfunc, errorlog);
+    std::string full = bbReleaseCrashReport(base.c_str());
+    return new BBStr(full);
 }
 
 void bbClearException() {
@@ -209,6 +211,8 @@ void _bbDebugStmt(int pos, const char* file) {
         gx_runtime->debugSys(&sys);
     }
 
+    _bbReleaseStmt(pos, file);
+
     if (gx_runtime->debugStmt(pos, file)) {
         return;
     }
@@ -217,10 +221,12 @@ void _bbDebugStmt(int pos, const char* file) {
 }
 
 void _bbDebugEnter(void* frame, void* env, const char* func) {
+    _bbReleaseEnter(func);
     gx_runtime->debugEnter(frame, env, func);
 }
 
 void _bbDebugLeave() {
+    _bbReleaseLeave();
     gx_runtime->debugLeave();
 }
 
@@ -298,6 +304,9 @@ void bbruntime_link(void (*rtSym)(const char* sym, void* pc)) {
     rtSym("_bbDebugStmt", _bbDebugStmt);
     rtSym("_bbDebugEnter", _bbDebugEnter);
     rtSym("_bbDebugLeave", _bbDebugLeave);
+    rtSym("_bbReleaseEnter", _bbReleaseEnter);
+    rtSym("_bbReleaseLeave", _bbReleaseLeave);
+    rtSym("_bbReleaseStmt", _bbReleaseStmt);
 
     basic_link(rtSym);
     math_link(rtSym);
@@ -421,6 +430,7 @@ inline static void program(void (*pc)()) {
 const char* bbruntime_run(gxRuntime* rt, void (*pc)(), bool dbg) {
     debug = dbg;
     gx_runtime = rt;
+    bbReleaseReset();
 
     if (!bbruntime_create()) return MultiLang::unable_start_program;
     const char* t = 0;
@@ -441,6 +451,35 @@ const char* bbruntime_run(gxRuntime* rt, void (*pc)(), bool dbg) {
 }
 
 void bbruntime_panic(const wchar_t* err) {
-    MessageBoxW(gx_runtime->hwnd, err, MultiLang::runtime_error, MB_APPLMODAL);
+    std::wstring msg = err ? err : L"";
+    if (bbReleaseFile() || bbReleaseDepth() > 0) {
+        const char* file = bbReleaseFile();
+        if (file && file[0]) {
+            int pos = bbReleasePos();
+            int row = (pos >> 16) & 0xffff, col = pos & 0xffff;
+            wchar_t loc[1024];
+            size_t n = 0;
+            mbstowcs_s(&n, loc, 1024, file, _TRUNCATE);
+            msg += L"\r\n\r\nLocation: ";
+            msg += loc;
+            wchar_t rc[64];
+            swprintf_s(rc, 64, L" (line %d, col %d)", row + 1, col + 1);
+            msg += rc;
+        }
+        if (bbReleaseDepth() > 0) {
+            msg += L"\r\n\r\nCall stack (innermost first):\r\n";
+            for (int i = bbReleaseDepth() - 1; i >= 0; --i) {
+                const char* f = bbReleaseFuncAt(i);
+                if (!f || !f[0]) continue;
+                wchar_t fn[256];
+                size_t n = 0;
+                mbstowcs_s(&n, fn, 256, f, _TRUNCATE);
+                msg += L"  ";
+                msg += fn;
+                msg += L"\r\n";
+            }
+        }
+    }
+    MessageBoxW(gx_runtime->hwnd, msg.c_str(), MultiLang::runtime_error, MB_APPLMODAL);
     ExitProcess(-1);
 }

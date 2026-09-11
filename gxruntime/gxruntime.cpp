@@ -233,9 +233,13 @@ void gxRuntime::resumeAudio() {
 }
 
 void gxRuntime::restoreGraphics() {
-	if(auto_suspend) {
-		if(!graphics->restore()) gfx_lost = true;
-		else gfx_lost = false;
+	if (!graphics) return;
+	gxGraphics::DeviceState state = graphics->getDeviceState();
+	if (state == gxGraphics::DEVICE_NEEDS_RESET || state == gxGraphics::DEVICE_LOST) {
+		gfx_lost = !graphics->restore();
+	}
+	else {
+		gfx_lost = false;
 	}
 }
 
@@ -296,9 +300,9 @@ void gxRuntime::resume() {
 // FORCE SUSPEND //
 ///////////////////
 void gxRuntime::forceSuspend() {
-	if(gfx_mode == GMODE_EXCLUSIVE) {
+	if (gfx_mode == GMODE_EXCLUSIVE) {
+		ShowWindow(hwnd, SW_MINIMIZE);
 		SetForegroundWindow(GetDesktopWindow());
-		ShowWindow(GetDesktopWindow(), SW_SHOW);
 	}
 	else {
 		suspend();
@@ -543,10 +547,6 @@ LRESULT gxRuntime::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	//handle 'special' messages!
 	switch(msg) {
 		case WM_PAINT:
-			if(gfx_mode && !auto_suspend) {
-				if(!graphics->restore()) gfx_lost = true;
-				else gfx_lost = false;
-			}
 			BeginPaint(hwnd, &ps);
 			paint();
 			EndPaint(hwnd, &ps);
@@ -1608,11 +1608,14 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 	else if(t == "tempdir") {
 		if(GetTempPath(MAX_PATH, buff)) return toDir(buff);
 	}
-	else if(t == "direct3d8") {
+	else if(t == "direct3d7" || t == "direct3d8" || t == "direct3d9" || t == "direct3d") {
 		if(graphics) return itoa((int)graphics->dir3d);
 	}
-	else if(t == "direct3ddevice8") {
+	else if(t == "direct3ddevice7" || t == "direct3ddevice8" || t == "direct3ddevice9" || t == "direct3ddevice") {
 		if(graphics) return itoa((int)graphics->dir3dDev);
+	}
+	else if(t == "directdraw7" || t == "directdraw" || t == "directdraw8") {
+		if(graphics) return itoa((int)graphics->dir3d);
 	}
 	else if(t == "directinput7") {
 		if(input) return itoa((int)input->dirInput);
