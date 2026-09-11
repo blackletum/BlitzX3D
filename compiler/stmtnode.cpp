@@ -697,7 +697,9 @@ void CompoundAssNode::semant(Environ* e) {
 
 	Type* exprType = lhs->sem_type;
 	if (op == '&') {
-		exprType = Type::string_type;
+		if (lhs->sem_type == Type::string_type) exprType = Type::string_type;
+		else if (lhs->sem_type == Type::int_type) exprType = Type::int_type;
+		else ex(MultiLang::illegal_operator_for_type);
 	}
 	else if (lhs->sem_type == Type::string_type) {
 		if (op != '+') ex("String only supports += and &=");
@@ -722,6 +724,9 @@ void CompoundAssNode::translate(Codegen* g) {
 		case '/': opIR = IR_FDIV; break;
 		}
 		g->code(lhs->store(g, new TNode(opIR, load, rNode)));
+	}
+	else if (op == '&') {
+		g->code(lhs->store(g, new TNode(IR_AND, load, rNode, genLabel())));
 	}
 	else {
 		int opIR = 0;
