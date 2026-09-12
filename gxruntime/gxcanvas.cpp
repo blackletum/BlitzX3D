@@ -878,6 +878,11 @@ static void setupBlitRenderState(IDirect3DDevice9* dev, bool solid) {
     dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
+    for (int s = 1; s < 8; ++s) {
+        dev->SetTexture(s, nullptr);
+        dev->SetTextureStageState(s, D3DTSS_COLOROP, D3DTOP_DISABLE);
+        dev->SetTextureStageState(s, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+    }
     if (!solid) {
         dev->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
         dev->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATER);
@@ -898,12 +903,27 @@ struct SavedBlitState {
     DWORD oldSrcBlend, oldDestBlend;
     DWORD oldLighting, oldTextureFactor;
     DWORD oldCOp, oldCArg1, oldCArg2, oldAOp, oldAArg1, oldAArg2, oldMag, oldMin, oldLodBias;
+    IDirect3DBaseTexture9* extraTex[7];
+    DWORD extraCOp[7], extraAOp[7];
 };
+
+static void disableExtraTextureStages(IDirect3DDevice9* dev) {
+    for (int s = 1; s < 8; ++s) {
+        dev->SetTexture(s, nullptr);
+        dev->SetTextureStageState(s, D3DTSS_COLOROP, D3DTOP_DISABLE);
+        dev->SetTextureStageState(s, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+    }
+}
 
 static void saveBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     dev->GetRenderTarget(0, &s.oldRT);
     dev->GetDepthStencilSurface(&s.oldDS);
     dev->GetTexture(0, &s.oldTex);
+    for (int i = 0; i < 7; ++i) {
+        dev->GetTexture(1 + i, &s.extraTex[i]);
+        dev->GetTextureStageState(1 + i, D3DTSS_COLOROP, &s.extraCOp[i]);
+        dev->GetTextureStageState(1 + i, D3DTSS_ALPHAOP, &s.extraAOp[i]);
+    }
     dev->GetViewport(&s.oldVP);
     dev->GetRenderState(D3DRS_ZENABLE, &s.oldZ);
     dev->GetRenderState(D3DRS_ALPHABLENDENABLE, &s.oldAlphaBlend);
@@ -951,6 +971,12 @@ static void restoreBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, s.oldLodBias);
     dev->SetTexture(0, s.oldTex);
     if (s.oldTex) s.oldTex->Release();
+    for (int i = 0; i < 7; ++i) {
+        dev->SetTexture(1 + i, s.extraTex[i]);
+        dev->SetTextureStageState(1 + i, D3DTSS_COLOROP, s.extraCOp[i]);
+        dev->SetTextureStageState(1 + i, D3DTSS_ALPHAOP, s.extraAOp[i]);
+        if (s.extraTex[i]) s.extraTex[i]->Release();
+    }
 }
 
 static bool isRenderTarget(IDirect3DSurface9* s) {
@@ -989,6 +1015,7 @@ void gxCanvas::beginBlitBatch() const {
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
 
     dev->BeginScene();
+    disableExtraTextureStages(dev);
     blit_batch_active = true;
 }
 
@@ -1264,6 +1291,8 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
     dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
+
+    disableExtraTextureStages(dev);
 
     dev->BeginScene();
     drawBlitQuad(dev, (IDirect3DTexture9*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
@@ -1775,6 +1804,7 @@ void gxCanvas::blitTForm(int x, int y, gxCanvas* src, int src_x, int src_y, int 
     dev->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
     dev->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
     dev->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    disableExtraTextureStages(dev);
     if (effect2D) {
         D3DXMATRIX proj, view, world; D3DXMatrixIdentity(&world); D3DXMatrixIdentity(&view);
         D3DVIEWPORT9 curVP; dev->GetViewport(&curVP);
