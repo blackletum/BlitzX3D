@@ -33,6 +33,9 @@ public:
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
 	mutable unsigned char* locked_surf;
 	mutable bool lock_is_rt;
+	mutable bool lock_ro;
+	mutable RECT sdlDirtyRect;
+	mutable bool sdlDirtyValid;
 
 	PixelFormat format;
 
@@ -80,6 +83,7 @@ private:
 	int origin_x, origin_y, handle_x, handle_y;
 
 	void updateBitMask(const RECT& r) const;
+	bool lockImpl(bool ro)const;
 
 	mutable int blit_batch_depth;
 	mutable bool blit_batch_active;
@@ -150,7 +154,14 @@ public:
 	void endBlitBatch() const;
 
 	bool lock()const;
+	bool lockRO()const;
 	bool isLocked()const { return locked_cnt > 0; }
+	bool getSDLDirtyRect(RECT& out)const {
+		if (!sdlDirtyValid) return false;
+		out = sdlDirtyRect;
+		return true;
+	}
+	void clearSDLDirty()const { sdlDirtyValid = false; }
 	unsigned char* getLockedSurf()const { return locked_surf; }
 	int getLockedPitch()const { return locked_pitch; }
 	void setPixel(int x, int y, unsigned argb);

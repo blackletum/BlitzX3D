@@ -965,30 +965,38 @@ void gxScene::computeGpuMeshUniforms(sdlgpu::MeshUniforms& u) const {
 	u.flags[1] = (fx & (FX_FULLBRIGHT | FX_EMISSIVE)) ? 1.0f : 0.0f;
 	u.flags[2] = 0.0f; u.flags[3] = 0.5f;
 
-	u.lightColor[0] = u.lightColor[1] = u.lightColor[2] = 0.0f;
-	u.lightColor[3] = 0.0f;
-	u.lightPosDir[0] = 0.0f; u.lightPosDir[1] = 0.0f; u.lightPosDir[2] = -1.0f;
-	u.lightPosDir[3] = 0.0f;
+	u.lightCount = 0;
 	if (!(fx & FX_FULLBRIGHT)) {
 		for (gxLight* light : _curLights) {
 			if (!light) continue;
+			if (u.lightCount >= sdlgpu::kGpuMaxLights) break;
 			const D3DLIGHT9& L = light->d3d_light;
 			if ((fx & FX_CONDLIGHT) && L.Type == D3DLIGHT_DIRECTIONAL) continue;
+			int i = u.lightCount;
 			if (L.Type == D3DLIGHT_DIRECTIONAL) {
 				float dx = -L.Direction.x, dy = -L.Direction.y, dz = -L.Direction.z;
 				float len = sqrtf(dx * dx + dy * dy + dz * dz);
 				if (len > 1e-6f) { dx /= len; dy /= len; dz /= len; }
 				else { dx = 0.0f; dy = 0.0f; dz = -1.0f; }
-				u.lightPosDir[0] = dx; u.lightPosDir[1] = dy; u.lightPosDir[2] = dz;
-				u.lightPosDir[3] = 0.0f;
+				u.lightPos[i][0] = dx; u.lightPos[i][1] = dy; u.lightPos[i][2] = dz;
 			}
 			else {
-				u.lightPosDir[0] = L.Position.x; u.lightPosDir[1] = L.Position.y; u.lightPosDir[2] = L.Position.z;
-				u.lightPosDir[3] = 1.0f;
+				u.lightPos[i][0] = L.Position.x; u.lightPos[i][1] = L.Position.y; u.lightPos[i][2] = L.Position.z;
+				u.lightAtten[i][0] = L.Attenuation0; u.lightAtten[i][1] = L.Attenuation1;
+				u.lightAtten[i][2] = L.Attenuation2; u.lightAtten[i][3] = L.Range;
+				float dx = L.Direction.x, dy = L.Direction.y, dz = L.Direction.z;
+				float len = sqrtf(dx * dx + dy * dy + dz * dz);
+				if (len > 1e-6f) { dx /= len; dy /= len; dz /= len; }
+				else { dx = 0.0f; dy = 0.0f; dz = 1.0f; }
+				u.lightSpotDir[i][0] = dx; u.lightSpotDir[i][1] = dy; u.lightSpotDir[i][2] = dz;
+				u.lightSpotDir[i][3] = L.Falloff;
+				u.lightSpotPrm[i][0] = L.Theta; u.lightSpotPrm[i][1] = L.Phi;
+				u.lightSpotPrm[i][2] = 0.0f; u.lightSpotPrm[i][3] = 0.0f;
 			}
-			u.lightColor[0] = L.Diffuse.r; u.lightColor[1] = L.Diffuse.g; u.lightColor[2] = L.Diffuse.b;
-			u.lightColor[3] = 1.0f;
-			break;
+			u.lightPos[i][3] = (float)L.Type;
+			u.lightColor[i][0] = L.Diffuse.r; u.lightColor[i][1] = L.Diffuse.g; u.lightColor[i][2] = L.Diffuse.b;
+			u.lightColor[i][3] = 1.0f;
+			++u.lightCount;
 		}
 	}
 	if (!(fx & FX_NOFOG) && fogmode != FOG_NONE) u.fogParams[3] = (float)fogmode;

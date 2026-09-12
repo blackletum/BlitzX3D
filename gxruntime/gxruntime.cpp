@@ -476,7 +476,7 @@ void gxRuntime::flip(bool vwait) {
 		float b = (argb & 0xff) / 255.0f;
 		back = graphics ? graphics->getBackCanvas() : nullptr;
 		bool blitted = false;
-		if (back && back->lock()) {
+		if (back && back->lockRO()) {
 			int w = back->getWidth(), h = back->getHeight();
 			static std::vector<unsigned> px;
 			static int lastMod = -1;

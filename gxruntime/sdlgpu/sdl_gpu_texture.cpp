@@ -86,7 +86,7 @@ SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) {
 	std::vector<unsigned char> rgba;
 	rgba.resize((size_t)w * h * 4);
 
-	if (!canvas->lock()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	if (!canvas->lockRO()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	for (unsigned y = 0; y < h; ++y) {
 		for (unsigned x = 0; x < w; ++x) {
 			unsigned argb = canvas->getPixelFast((int)x, (int)y);
@@ -135,7 +135,7 @@ SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) 
 	}
 	std::vector<unsigned char> rgba;
 	rgba.resize((size_t)w * h * 4);
-	if (!canvas->lock()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	if (!canvas->lockRO()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	unsigned clsRgb = canvas->getClsColor() & 0x00ffffff;
 	for (unsigned y = 0; y < h; ++y) {
 		for (unsigned x = 0; x < w; ++x) {
@@ -156,7 +156,8 @@ SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) 
 	return tex;
 }
 
-SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* canvas, SDL_GPUCommandBuffer* cmds) {
+SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* canvas, SDL_GPUCommandBuffer* cmds, bool* didUpload) {
+	if (didUpload) *didUpload = false;
 	if (!dev || !canvas) return nullptr;
 	unsigned w = (unsigned)canvas->getWidth();
 	unsigned h = (unsigned)canvas->getHeight();
@@ -180,14 +181,23 @@ SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* c
 		if (!tex) return nullptr;
 		isNew = true;
 	}
+	RECT dr{};
+	bool hasDirty = !isNew && canvas->getSDLDirtyRect(dr);
+	unsigned ux = 0, uy = 0, uw = w, uh = h;
+	if (hasDirty) {
+		int x0 = dr.left < 0 ? 0 : dr.left, y0 = dr.top < 0 ? 0 : dr.top;
+		int x1 = dr.right > (int)w ? (int)w : dr.right, y1 = dr.bottom > (int)h ? (int)h : dr.bottom;
+		if (x1 <= x0 || y1 <= y0) hasDirty = false;
+		else { ux = (unsigned)x0; uy = (unsigned)y0; uw = (unsigned)(x1 - x0); uh = (unsigned)(y1 - y0); }
+	}
 	static thread_local std::vector<unsigned char> rgba;
-	rgba.resize((size_t)w * h * 4);
-	if (!canvas->lock()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	rgba.resize((size_t)uw * uh * 4);
+	if (!canvas->lockRO()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	unsigned clsRgb = canvas->getClsColor() & 0x00ffffff;
-	for (unsigned y = 0; y < h; ++y) {
-		for (unsigned x = 0; x < w; ++x) {
-			unsigned argb = canvas->getPixelFast((int)x, (int)y);
-			unsigned char* dst = &rgba[(size_t)(y * w + x) * 4];
+	for (unsigned y = 0; y < uh; ++y) {
+		for (unsigned x = 0; x < uw; ++x) {
+			unsigned argb = canvas->getPixelFast((int)(ux + x), (int)(uy + y));
+			unsigned char* dst = &rgba[(size_t)(y * uw + x) * 4];
 			dst[0] = (argb >> 16) & 0xff;
 			dst[1] = (argb >> 8) & 0xff;
 			dst[2] = argb & 0xff;
@@ -195,7 +205,7 @@ SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* c
 		}
 	}
 	canvas->unlock();
-	Uint32 size = w * h * 4;
+	Uint32 size = uw * uh * 4;
 	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, size);
 	if (!buf) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	void* dst = SDL_MapGPUTransferBuffer(dev, buf, true);
@@ -206,16 +216,20 @@ SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* c
 	if (!copy) { ReleaseUploadTransferBuffer(dev, buf); if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
 	SDL_GPUTextureTransferInfo src{};
 	src.transfer_buffer = buf;
-	src.pixels_per_row = w;
-	src.rows_per_layer = h;
+	src.pixels_per_row = uw;
+	src.rows_per_layer = uh;
 	SDL_GPUTextureRegion reg{};
 	reg.texture = tex;
-	reg.w = w;
-	reg.h = h;
+	reg.x = ux;
+	reg.y = uy;
+	reg.w = uw;
+	reg.h = uh;
 	reg.d = 1;
 	SDL_UploadToGPUTexture(copy, &src, &reg, !isNew);
 	SDL_EndGPUCopyPass(copy);
 	ReleaseUploadTransferBuffer(dev, buf);
+	canvas->clearSDLDirty();
+	if (didUpload) *didUpload = true;
 	CanvasTexEntry e; e.tex = tex; e.dev = dev; e.modCnt = mod; e.w = w; e.h = h;
 	g_canvasOverlayMap[canvas] = e;
 	return tex;

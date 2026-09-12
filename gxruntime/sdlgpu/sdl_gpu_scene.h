@@ -13,11 +13,11 @@ namespace sdlgpu {
 
 struct GpuMesh;
 
+static constexpr int kGpuMaxLights = 8;
+
 struct MeshUniforms {
 	float mvp[16];
 	float world[16];
-	float lightPosDir[4];
-	float lightColor[4];
 	float ambient[4];
 	float matDiffuse[4];
 	float matSpec[4];
@@ -25,6 +25,13 @@ struct MeshUniforms {
 	float fogParams[4];
 	float eyePos[4];
 	float flags[4];
+	int lightCount;
+	float lightPad[3];
+	float lightPos[kGpuMaxLights][4];
+	float lightColor[kGpuMaxLights][4];
+	float lightAtten[kGpuMaxLights][4];
+	float lightSpotDir[kGpuMaxLights][4];
+	float lightSpotPrm[kGpuMaxLights][4];
 };
 
 struct GpuSceneFrame {

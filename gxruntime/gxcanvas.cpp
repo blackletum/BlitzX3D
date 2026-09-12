@@ -173,7 +173,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     graphics(g), plain_surf(s), tex(nullptr), cube_tex(nullptr), surf(s), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr), has_mask(false),
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), lock_ro(false), effect2D(nullptr), has_mask(false), sdlDirtyValid(false),
     blit_batch_depth(0), blit_batch_active(false), blit_batch_saved(nullptr) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
@@ -199,7 +199,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr), has_mask(false),
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), lock_ro(false), effect2D(nullptr), has_mask(false), sdlDirtyValid(false),
     blit_batch_depth(0), blit_batch_active(false), blit_batch_saved(nullptr) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
@@ -229,7 +229,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr), has_mask(false),
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), lock_ro(false), effect2D(nullptr), has_mask(false), sdlDirtyValid(false),
     blit_batch_depth(0), blit_batch_active(false), blit_batch_saved(nullptr) {
 
     D3DCUBEMAP_FACES faceMap[6] = {
@@ -450,6 +450,13 @@ void gxCanvas::releaseZBuffer() {
 
 void gxCanvas::damage(const RECT& r) const {
     ++mod_cnt;
+    if (!sdlDirtyValid) { sdlDirtyRect = r; sdlDirtyValid = true; }
+    else {
+        if (r.left < sdlDirtyRect.left) sdlDirtyRect.left = r.left;
+        if (r.top < sdlDirtyRect.top) sdlDirtyRect.top = r.top;
+        if (r.right > sdlDirtyRect.right) sdlDirtyRect.right = r.right;
+        if (r.bottom > sdlDirtyRect.bottom) sdlDirtyRect.bottom = r.bottom;
+    }
     if (cm_mask) updateBitMask(r);
 }
 
@@ -1490,7 +1497,16 @@ bool gxCanvas::rect_collide(int x1, int y1, int x2, int y2, int w2, int h2, bool
 }
 
 bool gxCanvas::lock() const {
+    return lockImpl(false);
+}
+
+bool gxCanvas::lockRO() const {
+    return lockImpl(true);
+}
+
+bool gxCanvas::lockImpl(bool ro) const {
     if (locked_cnt == 0) {
+        lock_ro = ro;
         D3DSURFACE_DESC desc;
         HRESULT hr = surf->GetDesc(&desc);
         if (FAILED(hr)) return false;
@@ -1546,7 +1562,7 @@ void gxCanvas::unlock() const {
         if (lock_is_rt) {
             if (t_surf) {
                 t_surf->UnlockRect();
-                graphics->dir3dDev->UpdateSurface(t_surf, nullptr, surf, nullptr);
+                if (!lock_ro) graphics->dir3dDev->UpdateSurface(t_surf, nullptr, surf, nullptr);
             }
         }
         else {
