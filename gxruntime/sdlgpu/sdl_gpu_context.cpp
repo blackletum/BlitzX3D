@@ -88,15 +88,19 @@ SDL_GPUDevice* CreateGPUDevice() {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateProperties failed: %s", SDL_GetError());
 		return nullptr;
 	}
+	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_VERBOSE_BOOLEAN, true);
 	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
 	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+	// SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, "vulkan");
 #ifdef _DEBUG
 	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
 #else
 	SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
 #endif
+	SDL_SetLogPriority(SDL_LOG_CATEGORY_GPU, SDL_LOG_PRIORITY_VERBOSE);
 	SDL_GPUDevice* dev = SDL_CreateGPUDeviceWithProperties(props);
 	SDL_DestroyProperties(props);
+	if (dev) SDL_SetGPUAllowedFramesInFlight(dev, 3);
 	if (!dev) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateGPUDeviceWithProperties failed: %s", SDL_GetError());
 		return nullptr;
