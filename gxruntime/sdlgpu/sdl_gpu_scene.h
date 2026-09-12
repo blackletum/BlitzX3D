@@ -19,6 +19,12 @@ struct MeshUniforms {
 	float lightPosDir[4];
 	float lightColor[4];
 	float ambient[4];
+	float matDiffuse[4];
+	float matSpec[4];
+	float fogColor[4];
+	float fogParams[4];
+	float eyePos[4];
+	float flags[4];
 };
 
 struct GpuSceneFrame {

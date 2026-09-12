@@ -946,6 +946,25 @@ void gxScene::computeGpuMeshUniforms(sdlgpu::MeshUniforms& u) const {
 	u.ambient[2] = (amb & 0xff) / 255.0f;
 	u.ambient[3] = 0.0f;
 
+	u.matDiffuse[0] = material.Diffuse.r; u.matDiffuse[1] = material.Diffuse.g;
+	u.matDiffuse[2] = material.Diffuse.b; u.matDiffuse[3] = material.Diffuse.a;
+	u.matSpec[0] = material.Specular.r; u.matSpec[1] = material.Specular.g;
+	u.matSpec[2] = material.Specular.b; u.matSpec[3] = material.Power;
+
+	u.fogColor[0] = ((fogcolor >> 16) & 0xff) / 255.0f;
+	u.fogColor[1] = ((fogcolor >> 8) & 0xff) / 255.0f;
+	u.fogColor[2] = (fogcolor & 0xff) / 255.0f;
+	u.fogColor[3] = 1.0f;
+	u.fogParams[0] = fogrange_nr; u.fogParams[1] = fogrange_fr;
+	u.fogParams[2] = fog_density; u.fogParams[3] = 0.0f;
+
+	u.eyePos[0] = eyePos[0]; u.eyePos[1] = eyePos[1]; u.eyePos[2] = eyePos[2];
+	u.eyePos[3] = 0.0f;
+
+	u.flags[0] = (fx & FX_VERTEXCOLOR) ? 1.0f : 0.0f;
+	u.flags[1] = (fx & (FX_FULLBRIGHT | FX_EMISSIVE)) ? 1.0f : 0.0f;
+	u.flags[2] = 0.0f; u.flags[3] = 0.5f;
+
 	u.lightColor[0] = u.lightColor[1] = u.lightColor[2] = 0.0f;
 	u.lightColor[3] = 0.0f;
 	u.lightPosDir[0] = 0.0f; u.lightPosDir[1] = 0.0f; u.lightPosDir[2] = -1.0f;
@@ -970,6 +989,16 @@ void gxScene::computeGpuMeshUniforms(sdlgpu::MeshUniforms& u) const {
 			u.lightColor[0] = L.Diffuse.r; u.lightColor[1] = L.Diffuse.g; u.lightColor[2] = L.Diffuse.b;
 			u.lightColor[3] = 1.0f;
 			break;
+		}
+	}
+	if (!(fx & FX_NOFOG) && fogmode != FOG_NONE) u.fogParams[3] = (float)fogmode;
+	if (fx & FX_ALPHATEST) {
+		if (fx & FX_VERTEXALPHA) { u.flags[2] = 0.0f; }
+		else {
+			int base = 128;
+			if (n_texs > 0 && texstate[0].canvas && (texstate[0].canvas->getFlags() & gxCanvas::CANVAS_TEX_MASK)) base = 200;
+			u.flags[2] = 1.0f;
+			u.flags[3] = (float)(base * material.Diffuse.a) / 255.0f;
 		}
 	}
 }
