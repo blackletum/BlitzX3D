@@ -3,6 +3,7 @@
 
 struct SDL_GPUDevice;
 struct SDL_GPUTexture;
+struct SDL_GPUCommandBuffer;
 
 class gxCanvas;
 
@@ -21,6 +22,7 @@ namespace sdlgpu {
 
 	SDL_GPUTexture* GetCanvasTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas);
 	SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas);
+	SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* canvas, SDL_GPUCommandBuffer* cmds);
 
 	void TeardownTexturePools(SDL_GPUDevice* dev);
 }

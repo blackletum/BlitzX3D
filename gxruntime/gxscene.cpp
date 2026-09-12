@@ -851,7 +851,7 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 			sdlgpu::MeshUniforms uniforms;
 			computeGpuMeshUniforms(uniforms);
 			SDL_GPUDevice* dev = gpuFrame.dev ? gpuFrame.dev : (graphics && graphics->runtime ? (SDL_GPUDevice*)graphics->runtime->sdlGpu : nullptr);
-			if (dev && SDL_GetGPUShaderFormats(dev) != SDL_GPU_SHADERFORMAT_INVALID) {
+			if (dev) {
 				SDL_GPUTexture* tex = nullptr;
 				if (n_texs > 0 && texstate[0].canvas) tex = sdlgpu::GetCanvasTexture(dev, texstate[0].canvas);
 				bool alphaBlend = (blend != BLEND_REPLACE);

@@ -156,6 +156,71 @@ SDL_GPUTexture* GetCanvasOverlayTexture(SDL_GPUDevice* dev, ::gxCanvas* canvas) 
 	return tex;
 }
 
+SDL_GPUTexture* GetCanvasOverlayTextureBatched(SDL_GPUDevice* dev, ::gxCanvas* canvas, SDL_GPUCommandBuffer* cmds) {
+	if (!dev || !canvas) return nullptr;
+	unsigned w = (unsigned)canvas->getWidth();
+	unsigned h = (unsigned)canvas->getHeight();
+	if (!w || !h) return nullptr;
+	int mod = canvas->getModify();
+	auto it = g_canvasOverlayMap.find(canvas);
+	if (it != g_canvasOverlayMap.end() && it->second.tex && it->second.dev == dev && it->second.modCnt == mod && it->second.w == w && it->second.h == h) {
+		return it->second.tex;
+	}
+	if (!cmds) return GetCanvasOverlayTexture(dev, canvas);
+	SDL_GPUTexture* tex = nullptr;
+	bool isNew = false;
+	if (it != g_canvasOverlayMap.end() && it->second.tex && it->second.dev == dev && it->second.w == w && it->second.h == h) {
+		tex = it->second.tex;
+	} else {
+		SDL_GPUTexture* old = nullptr;
+		SDL_GPUDevice* oldDev = dev;
+		if (it != g_canvasOverlayMap.end()) { old = it->second.tex; oldDev = it->second.dev; g_canvasOverlayMap.erase(it); }
+		if (old) RetireTexture(oldDev, old);
+		tex = CreateTexture2D(dev, w, h);
+		if (!tex) return nullptr;
+		isNew = true;
+	}
+	static thread_local std::vector<unsigned char> rgba;
+	rgba.resize((size_t)w * h * 4);
+	if (!canvas->lock()) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	unsigned clsRgb = canvas->getClsColor() & 0x00ffffff;
+	for (unsigned y = 0; y < h; ++y) {
+		for (unsigned x = 0; x < w; ++x) {
+			unsigned argb = canvas->getPixelFast((int)x, (int)y);
+			unsigned char* dst = &rgba[(size_t)(y * w + x) * 4];
+			dst[0] = (argb >> 16) & 0xff;
+			dst[1] = (argb >> 8) & 0xff;
+			dst[2] = argb & 0xff;
+			dst[3] = ((argb & 0x00ffffff) == clsRgb) ? 0 : 255;
+		}
+	}
+	canvas->unlock();
+	Uint32 size = w * h * 4;
+	SDL_GPUTransferBuffer* buf = AcquireUploadTransferBuffer(dev, size);
+	if (!buf) { if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	void* dst = SDL_MapGPUTransferBuffer(dev, buf, true);
+	if (!dst) { ReleaseUploadTransferBuffer(dev, buf); if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	memcpy(dst, rgba.data(), size);
+	SDL_UnmapGPUTransferBuffer(dev, buf);
+	SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmds);
+	if (!copy) { ReleaseUploadTransferBuffer(dev, buf); if (isNew && tex) SDL_ReleaseGPUTexture(dev, tex); return nullptr; }
+	SDL_GPUTextureTransferInfo src{};
+	src.transfer_buffer = buf;
+	src.pixels_per_row = w;
+	src.rows_per_layer = h;
+	SDL_GPUTextureRegion reg{};
+	reg.texture = tex;
+	reg.w = w;
+	reg.h = h;
+	reg.d = 1;
+	SDL_UploadToGPUTexture(copy, &src, &reg, !isNew);
+	SDL_EndGPUCopyPass(copy);
+	ReleaseUploadTransferBuffer(dev, buf);
+	CanvasTexEntry e; e.tex = tex; e.dev = dev; e.modCnt = mod; e.w = w; e.h = h;
+	g_canvasOverlayMap[canvas] = e;
+	return tex;
+}
+
 SDL_GPUTexture* CreateTexture2D(SDL_GPUDevice* dev, unsigned w, unsigned h) {
 	if (!dev || !w || !h) return nullptr;
 	if (!SDL_GPUTextureSupportsFormat(dev, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_SAMPLER)) return nullptr;

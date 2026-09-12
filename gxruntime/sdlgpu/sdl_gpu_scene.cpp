@@ -100,7 +100,6 @@ void RenderSceneMesh(GpuSceneFrame& frame, GpuMesh* mesh, const MeshUniforms& un
 	if (first_vert < 0 || first_tri < 0) return;
 	if ((unsigned)first_vert + (unsigned)vert_cnt > mesh->maxVerts) return;
 	if ((unsigned)first_tri + (unsigned)tri_cnt > mesh->maxTris) return;
-	if (SDL_GetGPUShaderFormats(frame.dev) == SDL_GPU_SHADERFORMAT_INVALID) return;
 
 	unsigned indexCount = (unsigned)tri_cnt * 3;
 	unsigned startIndex = (unsigned)first_tri * 3;
@@ -152,7 +151,7 @@ bool PresentSceneFrame(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& frame
 	blit.destination.h = sh;
 	blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
 	blit.flip_mode = SDL_FLIP_NONE;
-	blit.filter = SDL_GPU_FILTER_LINEAR;
+	blit.filter = (frame.width == sw && frame.height == sh) ? SDL_GPU_FILTER_NEAREST : SDL_GPU_FILTER_LINEAR;
 	blit.cycle = false;
 	SDL_BlitGPUTexture(cmds, &blit);
 
@@ -221,12 +220,12 @@ bool PresentSceneWithCanvas(SDL_GPUDevice* dev, SDL_Window* win, GpuSceneFrame& 
 		blit.destination.h = sh;
 		blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
 		blit.flip_mode = SDL_FLIP_NONE;
-		blit.filter = SDL_GPU_FILTER_LINEAR;
+		blit.filter = (frame.width == sw && frame.height == sh) ? SDL_GPU_FILTER_NEAREST : SDL_GPU_FILTER_LINEAR;
 		blit.cycle = false;
 		SDL_BlitGPUTexture(cmds, &blit);
 	}
 
-	SDL_GPUTexture* canvasTex = canvas ? GetCanvasOverlayTexture(dev, canvas) : nullptr;
+	SDL_GPUTexture* canvasTex = canvas ? GetCanvasOverlayTextureBatched(dev, canvas, cmds) : nullptr;
 	bool haveText = HasPendingText();
 	bool textReady = haveText && PreparePendingText(dev, cmds);
 	if (canvasTex || textReady || !has3D) {
