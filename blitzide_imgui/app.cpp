@@ -400,9 +400,8 @@ void App::mainloop() {
 
 		if (drawIde || focused)
 			frame();
-
-		if (focused)
-			SDL_WaitEventTimeout(nullptr, 16);
+		
+		SDL_WaitEventTimeout(nullptr, 16);
 
 		drawIde = false;
 	}
